@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quinielas NFL - Picks por Partido</title>
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'nfl-blue': '#013369',
+                        'nfl-red': '#D50A0A',
+                        'nfl-silver': '#869397'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .picks-grid-container {
+            display: flex;
+            border: 1px solid #e5e7eb;
+            background-color: #e5e7eb;
+        }
+        
+        .users-column {
+            min-width: 200px;
+            max-width: 200px;
+            background-color: #f9fafb;
+            border-right: 2px solid #e5e7eb;
+        }
+        
+        .games-scroll-container {
+            flex: 1;
+            overflow-x: auto;
+        }
+        
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 120px));
+            gap: 1px;
+            background-color: #e5e7eb;
+            min-width: min-content;
+        }
+        
+        .cell {
+            background-color: white;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .user-header-cell {
+            background-color: #f3f4f6;
+            font-weight: 600;
+            justify-content: flex-start;
+            padding-left: 16px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .user-cell {
+            background-color: #f9fafb;
+            font-weight: 500;
+            justify-content: flex-start;
+            padding-left: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .game-header-cell {
+            background-color: #f3f4f6;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .pick-cell {
+            background-color: white;
+        }
+        
+        @media (max-width: 768px) {
+            .users-column {
+                min-width: 150px;
+                max-width: 150px;
+            }
+            .games-grid {
+                grid-template-columns: repeat(auto-fit, minmax(100px, 100px));
+            }
+            .cell {
+                min-height: 50px;
+                font-size: 0.875rem;
+                padding: 4px;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-nfl-blue via-blue-800 to-blue-900">
+    
+    <!-- Header -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-xl font-bold text-nfl-blue">🏈 Quinielas NFL</h1>
+                    <span class="text-sm text-gray-600">Picks por Partido - Semana {{ current_week }}</span>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('home') }}" 
+                       class="bg-nfl-blue text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors duration-200 text-sm font-medium">
+                        ← Volver al Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-full mx-auto p-4">
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            
+            <!-- Title and Description -->
+            <div class="bg-gray-50 px-6 py-4 border-b">
+                <h2 class="text-lg font-semibold text-gray-900 mb-2">Matriz de Picks - Semana {{ current_week }}</h2>
+                <p class="text-sm text-gray-600">
+                    Vista de todos los picks por partido. 
+                    <span class="text-green-600">✓</span> = Pick correcto, 
+                    <span class="text-red-600">✗</span> = Pick incorrecto,
+                    <span class="text-gray-500">○</span> = Pendiente
+                </p>
+            </div>
+
+            <!-- Picks Grid -->
+            {% if games and users %}
+                <div class="picks-grid-container">
+                    
+                    <!-- Users Column (Fixed) -->
+                    <div class="users-column">
+                        <!-- Header for Users Column -->
+                        <div class="cell user-header-cell">
+                            <span class="text-gray-700 font-semibold">Usuario</span>
+                        </div>
+                        
+                        <!-- User Names -->
+                        {% for user in users %}
+                            <div class="cell user-cell">
+                                <span class="text-sm text-gray-800 truncate">{{ user.username }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Games Grid (Scrollable) -->
+                    <div class="games-scroll-container">
+                        <div class="games-grid" style="grid-template-columns: repeat({{ games|length }}, 120px);">
+                            
+                            <!-- Games Header Row -->
+                            {% for game in games %}
+                                <div class="cell game-header-cell">
+                                    <div class="flex flex-col items-center space-y-2">
+                                        <!-- Away @ Home -->
+                                        <div class="flex items-center space-x-1">
+                                            {% if game.get('away_logo') %}
+                                                <img src="{{ game.away_logo }}" alt="{{ game.away_team }}" class="w-5 h-5">
+                                            {% else %}
+                                                <div class="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
+                                                    <span class="text-xs">{{ game.away_team[:2] if game.away_team else '?' }}</span>
+                                                </div>
+                                            {% endif %}
+                                            
+                                            <span class="text-xs text-gray-500">@</span>
+                                            
+                                            {% if game.get('home_logo') %}
+                                                <img src="{{ game.home_logo }}" alt="{{ game.home_team }}" class="w-5 h-5">
+                                            {% else %}
+                                                <div class="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
+                                                    <span class="text-xs">{{ game.home_team[:2] if game.home_team else '?' }}</span>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <!-- Game Status -->
+                                        {% if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] %}
+                                            <div class="text-xs text-green-600 font-medium">FINAL</div>
+                                        {% elif game.get('status') == 'STATUS_IN_PROGRESS' %}
+                                            <div class="text-xs text-yellow-600 font-medium animate-pulse">EN VIVO</div>
+                                        {% else %}
+                                            <div class="text-xs text-gray-400">{{ game.start_time[:5] if game.start_time else 'TBD' }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            
+                            <!-- Picks Grid Data -->
+                            {% for user in users %}
+                                {% for game in games %}
+                                    <div class="cell pick-cell">
+                                        {% set user_pick = picks_matrix.get(user.id, {}).get(game.id) %}
+                                        {% if user_pick %}
+                                            <div class="flex flex-col items-center space-y-1">
+                                                <!-- Team Logo del Pick -->
+                                                {% if user_pick.selection == game.home_team %}
+                                                    {% if game.get('home_logo') %}
+                                                        <img src="{{ game.home_logo }}" alt="{{ user_pick.selection }}" class="w-7 h-7">
+                                                    {% else %}
+                                                        <div class="w-7 h-7 bg-gray-200 rounded-full flex items-center justify-center">
+                                                            <span class="text-xs">{{ user_pick.selection[:2] }}</span>
+                                                        </div>
+                                                    {% endif %}
+                                                {% else %}
+                                                    {% if game.get('away_logo') %}
+                                                        <img src="{{ game.away_logo }}" alt="{{ user_pick.selection }}" class="w-7 h-7">
+                                                    {% else %}
+                                                        <div class="w-7 h-7 bg-gray-200 rounded-full flex items-center justify-center">
+                                                            <span class="text-xs">{{ user_pick.selection[:2] }}</span>
+                                                        </div>
+                                                    {% endif %}
+                                                {% endif %}
+                                                
+                                                <!-- Result Icon -->
+                                                <div class="text-base">
+                                                    {% if user_pick.is_correct == True %}
+                                                        <span class="text-green-500">✓</span>
+                                                    {% elif user_pick.is_correct == False %}
+                                                        <span class="text-red-500">✗</span>
+                                                    {% else %}
+                                                        <span class="text-gray-400">○</span>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <!-- No Pick -->
+                                            <div class="text-gray-300 text-xl">-</div>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            {% endfor %}
+                            
+                        </div>
+                    </div>
+                    
+                </div>
+                {% else %}
+                    <div class="p-8 text-center">
+                        <div class="text-gray-400 text-lg mb-2">📊</div>
+                        <p class="text-gray-600">No hay datos de picks disponibles para mostrar.</p>
+                    </div>
+                {% endif %}
+            </div>
+            
+        </div>
+        
+        <!-- Footer Info -->
+        <div class="mt-6 text-center">
+            <div class="inline-flex items-center space-x-6 bg-white rounded-lg px-6 py-3 shadow-sm">
+                <div class="flex items-center space-x-2">
+                    <span class="text-green-500 text-lg">✓</span>
+                    <span class="text-sm text-gray-600">Pick Correcto</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-red-500 text-lg">✗</span>
+                    <span class="text-sm text-gray-600">Pick Incorrecto</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-gray-400 text-lg">○</span>
+                    <span class="text-sm text-gray-600">Juego Pendiente</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-gray-300 text-lg">-</span>
+                    <span class="text-sm text-gray-600">Sin Pick</span>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+
+
+</body>
+</html>

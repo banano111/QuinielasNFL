@@ -1,0 +1,54 @@
+<!-- Clasificación parcial para HTMX -->
+<div class="p-6">
+    {% if standings %}
+        <div class="space-y-3">
+        {% for standing in standings %}
+            <div class="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg hover:bg-yellow-100 transition-colors duration-200">
+                <div class="flex items-center space-x-3">
+                    <div class="flex-shrink-0">
+                        <div class="h-10 w-10 {% if loop.index == 1 %}bg-yellow-500{% elif loop.index == 2 %}bg-gray-400{% elif loop.index == 3 %}bg-amber-600{% else %}bg-gray-300{% endif %} rounded-full flex items-center justify-center shadow-md">
+                            <span class="text-white text-sm font-bold">{{ loop.index }}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-gray-900">{{ standing.username }}</p>
+                        <p class="text-xs text-gray-500">Semana {{ standing.week }}</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-lg font-bold text-yellow-700">{{ standing.score }} pts</p>
+                    {% if standing.percentage > 0 %}
+                        <p class="text-xs text-yellow-600">{{ "%.0f"|format(standing.percentage) }}% acierto</p>
+                    {% else %}
+                        <p class="text-xs text-gray-500">Sin aciertos</p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-8">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No hay datos disponibles</h3>
+            <p class="mt-1 text-sm text-gray-500">Aún no se han procesado resultados para mostrar la clasificación.</p>
+        </div>
+    {% endif %}
+</div>
+
+{% if standings and standings|length > 5 %}
+    <div class="mt-4 text-center">
+        <button class="text-sm text-nfl-blue hover:text-blue-800 font-medium transition-colors duration-200" 
+                onclick="toggleFullStandings()">
+            Ver todos los participantes
+        </button>
+    </div>
+{% endif %}
+
+<script>
+function toggleFullStandings() {
+    // Esta función se puede expandir para mostrar una modal con la clasificación completa
+    console.log('Mostrar clasificación completa');
+}
+</script>

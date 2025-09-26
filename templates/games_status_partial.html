@@ -1,0 +1,77 @@
+<!-- Games Status Section -->
+<div class="p-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {% for game in games %}
+        <div class="bg-white rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow p-4">
+            
+            <!-- Equipos y Scores -->
+            <div class="flex items-center justify-between mb-3">
+                <!-- Away Team -->
+                <div class="flex flex-col items-center space-y-1">
+                    {% if game.away_logo %}
+                        <img src="{{ game.away_logo }}" alt="{{ game.away_team }}" class="w-8 h-8 object-contain">
+                    {% else %}
+                        <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                            <span class="text-xs text-gray-500">?</span>
+                        </div>
+                    {% endif %}
+                    {% if game.get('status') in ['STATUS_FINAL', 'STATUS_IN_PROGRESS', 'Final', 'Completed'] and game.get('away_score') is not none %}
+                        <span class="text-lg font-bold {{ 'text-yellow-600' if game.get('status') == 'STATUS_IN_PROGRESS' else 'text-gray-900' }}">{{ game.away_score }}</span>
+                    {% else %}
+                        <span class="text-sm text-gray-400">-</span>
+                    {% endif %}
+                </div>
+                
+                <!-- VS o @ con tiempo -->
+                <div class="flex flex-col items-center">
+                    <span class="text-sm font-medium text-gray-400">@</span>
+                    <span class="text-xs text-gray-400 mt-1">{{ game.start_time if game.start_time else 'TBD' }}</span>
+                </div>
+                
+                <!-- Home Team -->
+                <div class="flex flex-col items-center space-y-1">
+                    {% if game.home_logo %}
+                        <img src="{{ game.home_logo }}" alt="{{ game.home_team }}" class="w-8 h-8 object-contain">
+                    {% else %}
+                        <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                            <span class="text-xs text-gray-500">?</span>
+                        </div>
+                    {% endif %}
+                    {% if game.get('status') in ['STATUS_FINAL', 'STATUS_IN_PROGRESS', 'Final', 'Completed'] and game.get('home_score') is not none %}
+                        <span class="text-lg font-bold {{ 'text-yellow-600' if game.get('status') == 'STATUS_IN_PROGRESS' else 'text-gray-900' }}">{{ game.home_score }}</span>
+                    {% else %}
+                        <span class="text-sm text-gray-400">-</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Status -->
+            <div class="flex justify-center">
+                {% if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed'] %}
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        FINAL
+                    </span>
+                {% elif game.get('status') == 'STATUS_IN_PROGRESS' %}
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 animate-pulse">
+                        🔴 EN VIVO
+                    </span>
+                {% else %}
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                        Programado
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Last Update Info -->
+<div class="mt-4 flex justify-center">
+    <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <p class="text-xs text-gray-600 text-center">
+            Última actualización: 
+            <span class="font-medium">{{ last_update_mex if last_update_mex else 'N/A' }}</span>
+        </p>
+    </div>
+</div>

@@ -1,0 +1,122 @@
+<div class="bg-gray-50 rounded-lg p-4">
+    <div class="flex items-center justify-between mb-4">
+        <h4 class="text-lg font-medium text-gray-900">Partidos de la Semana {{ week }}</h4>
+        <div class="flex gap-4 text-sm">
+            <span class="text-green-600 font-medium">{{ completed_games }} Completados</span>
+            {% if in_progress_games > 0 %}
+                <span class="text-yellow-600 font-medium animate-pulse">{{ in_progress_games }} En Vivo</span>
+            {% endif %}
+            <span class="text-gray-500">{{ total_games - completed_games - in_progress_games }} Pendientes</span>
+            <span class="text-gray-700">Total: {{ total_games }}</span>
+        </div>
+    </div>
+    
+    {% if games %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for game in games %}
+                <div class="bg-white rounded-lg border-2 p-4 {{ 'border-green-300 bg-green-50' if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] else ('border-yellow-400 bg-yellow-50' if game.get('status') == 'STATUS_IN_PROGRESS' else 'border-gray-200') }} shadow-sm hover:shadow-md transition-shadow">
+                    
+                    <!-- Equipos y Scores -->
+                    <div class="flex items-center justify-between mb-3">
+                        <!-- Away Team -->
+                        <div class="flex flex-col items-center space-y-1">
+                            {% if game.get('away_logo') %}
+                                <img src="{{ game.away_logo }}" alt="{{ game.away_team }}" class="w-8 h-8">
+                            {% else %}
+                                <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                                    <span class="text-xs text-gray-500">?</span>
+                                </div>
+                            {% endif %}
+                            {% if game.get('away_score') is not none %}
+                                <span class="text-lg font-bold {{ 'text-yellow-600' if game.get('status') == 'STATUS_IN_PROGRESS' else 'text-gray-900' }}">{{ game.away_score }}</span>
+                            {% else %}
+                                <span class="text-sm text-gray-400">-</span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- VS o @ -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-sm font-medium text-gray-400">@</span>
+                            <span class="text-xs text-gray-400 mt-1">{{ game.start_time if game.start_time else 'TBD' }}</span>
+                        </div>
+                        
+                        <!-- Home Team -->
+                        <div class="flex flex-col items-center space-y-1">
+                            {% if game.get('home_logo') %}
+                                <img src="{{ game.home_logo }}" alt="{{ game.home_team }}" class="w-8 h-8">
+                            {% else %}
+                                <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                                    <span class="text-xs text-gray-500">?</span>
+                                </div>
+                            {% endif %}
+                            {% if game.get('home_score') is not none %}
+                                <span class="text-lg font-bold {{ 'text-yellow-600' if game.get('status') == 'STATUS_IN_PROGRESS' else 'text-gray-900' }}">{{ game.home_score }}</span>
+                            {% else %}
+                                <span class="text-sm text-gray-400">-</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Status -->
+                    <div class="flex justify-center mb-2">
+                        {% if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] %}
+                            <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                FINAL
+                            </span>
+                        {% elif game.get('status') == 'STATUS_IN_PROGRESS' %}
+                            <span class="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 animate-pulse">
+                                EN VIVO
+                            </span>
+                        {% else %}
+                            <span class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                {{ game.get('status', 'Programado') }}
+                            </span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Ganador (solo si el juego terminó) -->
+                    {% if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] and game.get('home_score') is not none and game.get('away_score') is not none %}
+                        <div class="flex justify-center">
+                            {% if game.home_score > game.away_score %}
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-xs text-green-600 font-medium">Ganador:</span>
+                                    {% if game.get('home_logo') %}
+                                        <img src="{{ game.home_logo }}" alt="{{ game.home_team }}" class="w-5 h-5">
+                                    {% endif %}
+                                </div>
+                            {% elif game.away_score > game.home_score %}
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-xs text-green-600 font-medium">Ganador:</span>
+                                    {% if game.get('away_logo') %}
+                                        <img src="{{ game.away_logo }}" alt="{{ game.away_team }}" class="w-5 h-5">
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span class="text-xs text-yellow-600 font-medium">Empate</span>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        
+        {% if completed_games > 0 %}
+            <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p class="text-sm text-blue-700">
+                    <strong>{{ completed_games }}</strong> juegos completados están listos para procesar. 
+                    Usa el botón "Procesar Resultados" de abajo para actualizar la base de datos.
+                </p>
+            </div>
+        {% elif completed_games == 0 %}
+            <div class="mt-4 p-3 bg-yellow-50 rounded-lg">
+                <p class="text-sm text-yellow-700">
+                    No hay juegos completados en esta semana aún. Los resultados se podrán procesar cuando los juegos terminen.
+                </p>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="text-center py-4 text-gray-500">
+            No se encontraron partidos para esta semana.
+        </div>
+    {% endif %}
+</div>

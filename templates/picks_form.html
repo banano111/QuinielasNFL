@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiniela Semanal - NFL</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        nflblue: '#03045E',
+                        nflgray: '#E9ECEF',
+                        nflgreen: '#28A745',
+                        nflred: '#DC3545',
+                        nflorange: '#FF8A00',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
+        /* Oculta los radio buttons nativos */
+        input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        /* Estilo para los labels de los equipos cuando no están seleccionados */
+        .radio-label {
+            @apply cursor-pointer transition-all duration-200 transform;
+        }
+
+        /* Estilo cuando el radio button está seleccionado */
+        input[type="radio"]:checked + .radio-label {
+            @apply bg-nflgreen text-white transform scale-105 shadow-lg border-nflgreen;
+        }
+
+        /* Efecto hover */
+        .radio-label:hover {
+            @apply transform scale-102 shadow-md;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation Header -->
+    <nav class="bg-nflblue shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center">
+                        <svg class="h-10 w-10 text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                        </svg>
+                        <h1 class="text-xl font-bold text-white">Quiniela NFL</h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('home') }}" 
+                       class="text-white hover:text-nflorange px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                        Dashboard
+                    </a>
+                    <a href="{{ url_for('logout') }}" 
+                       class="bg-nflred hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                        Cerrar Sesión
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Header Section -->
+        <div class="bg-white overflow-hidden shadow-xl rounded-lg mb-6">
+            <div class="bg-gradient-to-r from-nflblue to-blue-600 px-6 py-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-3xl font-bold text-white">Semana {{ current_week }}</h1>
+                        <p class="text-blue-100 mt-1">Haz tus selecciones para esta semana</p>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-bold text-white">🏈</div>
+                        <p class="text-blue-100 text-sm">NFL Picks</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-6 space-y-2">
+                    {% for category, message in messages %}
+                        <div class="rounded-md p-4 {% if category == 'error' %}bg-red-50 border border-red-200 text-red-800{% elif category == 'success' %}bg-green-50 border border-green-200 text-green-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %}">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    {% if category == 'error' %}
+                                        <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    {% elif category == 'success' %}
+                                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    {% else %}
+                                        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    {% endif %}
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium">{{ message }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Picks Form -->
+        <form method="POST" class="space-y-6">
+            {% if games %}
+                {% for game in games %}
+                    <div class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-semibold text-gray-900">
+                                    Partido {{ loop.index }}
+                                </h3>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {{ game.start_time }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Away Team -->
+                                <div class="relative">
+                                    <input type="radio" 
+                                           id="game_{{ game.id }}_away" 
+                                           name="game_{{ game.id }}" 
+                                           value="{{ game.away_team }}"
+                                           {% if user_picks.get(game.id|string) == game.away_team %}checked{% endif %}>
+                                    
+                                    <label for="game_{{ game.id }}_away" 
+                                           class="radio-label flex items-center p-4 border-2 border-gray-200 rounded-lg bg-white hover:bg-gray-50">
+                                        <div class="flex items-center space-x-4">
+                                            {% if game.away_logo %}
+                                                <img src="{{ game.away_logo }}" 
+                                                     alt="{{ game.away_team }}" 
+                                                     class="w-12 h-12 object-contain">
+                                            {% else %}
+                                                <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                                                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                                    </svg>
+                                                </div>
+                                            {% endif %}
+                                            <div>
+                                                <p class="font-semibold text-gray-900">{{ game.away_team }}</p>
+                                                <p class="text-sm text-gray-500">Visitante</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <!-- Home Team -->
+                                <div class="relative">
+                                    <input type="radio" 
+                                           id="game_{{ game.id }}_home" 
+                                           name="game_{{ game.id }}" 
+                                           value="{{ game.home_team }}"
+                                           {% if user_picks.get(game.id|string) == game.home_team %}checked{% endif %}>
+                                    
+                                    <label for="game_{{ game.id }}_home" 
+                                           class="radio-label flex items-center p-4 border-2 border-gray-200 rounded-lg bg-white hover:bg-gray-50">
+                                        <div class="flex items-center space-x-4">
+                                            {% if game.home_logo %}
+                                                <img src="{{ game.home_logo }}" 
+                                                     alt="{{ game.home_team }}" 
+                                                     class="w-12 h-12 object-contain">
+                                            {% else %}
+                                                <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                                                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                                    </svg>
+                                                </div>
+                                            {% endif %}
+                                            <div>
+                                                <p class="font-semibold text-gray-900">{{ game.home_team }}</p>
+                                                <p class="text-sm text-gray-500">Local</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- VS indicator -->
+                            <div class="flex justify-center mt-4">
+                                <div class="bg-gray-100 rounded-full px-4 py-2">
+                                    <span class="text-sm font-bold text-gray-600">VS</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+
+                <!-- Submit Button -->
+                <div class="sticky bottom-0 bg-white p-6 border-t border-gray-200 shadow-lg">
+                    <div class="max-w-4xl mx-auto">
+                        <button type="submit" 
+                                class="w-full bg-nflgreen hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nflgreen">
+                            <div class="flex items-center justify-center space-x-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <span>Enviar Picks</span>
+                            </div>
+                        </button>
+                        
+                        <p class="text-center text-sm text-gray-500 mt-3">
+                            Asegúrate de seleccionar un equipo para cada partido antes de enviar
+                        </p>
+                    </div>
+                </div>
+
+            {% else %}
+                <!-- No Games Available -->
+                <div class="bg-white rounded-lg shadow-md p-8 text-center">
+                    <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-gray-100 mb-4">
+                        <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">
+                        No hay partidos disponibles
+                    </h3>
+                    <p class="text-gray-600 mb-4">
+                        Los partidos para esta semana aún no están disponibles. 
+                    </p>
+                    <a href="{{ url_for('home') }}" 
+                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-nflblue hover:bg-blue-700">
+                        Volver al Dashboard
+                    </a>
+                </div>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- JavaScript for form validation -->
+    <script>
+        // Verificar que todos los partidos tengan una selección antes de enviar
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const gameInputs = document.querySelectorAll('input[type="radio"]');
+            const games = new Set();
+            const selectedGames = new Set();
+
+            // Recopilar todos los IDs de juegos únicos
+            gameInputs.forEach(input => {
+                const gameName = input.name;
+                games.add(gameName);
+                if (input.checked) {
+                    selectedGames.add(gameName);
+                }
+            });
+
+            // Verificar si faltan selecciones
+            if (selectedGames.size < games.size) {
+                e.preventDefault();
+                alert('Por favor, selecciona un equipo para cada partido antes de enviar tus picks.');
+                
+                // Resaltar partidos sin selección
+                games.forEach(gameName => {
+                    if (!selectedGames.has(gameName)) {
+                        const gameInputs = document.querySelectorAll(`input[name="${gameName}"]`);
+                        gameInputs.forEach(input => {
+                            const label = input.nextElementSibling;
+                            if (label) {
+                                label.classList.add('border-red-300', 'bg-red-50');
+                                setTimeout(() => {
+                                    label.classList.remove('border-red-300', 'bg-red-50');
+                                }, 3000);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        // Efecto visual para mostrar selección
+        document.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                // Quitar estilo de todos los labels del mismo grupo
+                const gameName = this.name;
+                const allLabels = document.querySelectorAll(`input[name="${gameName}"] + label`);
+                allLabels.forEach(label => {
+                    label.classList.remove('bg-nflgreen', 'text-white', 'border-nflgreen', 'transform', 'scale-105', 'shadow-lg');
+                    label.classList.add('border-gray-200', 'bg-white');
+                });
+
+                // Aplicar estilo al label seleccionado
+                if (this.checked) {
+                    const selectedLabel = this.nextElementSibling;
+                    selectedLabel.classList.remove('border-gray-200', 'bg-white');
+                    selectedLabel.classList.add('bg-nflgreen', 'text-white', 'border-nflgreen', 'transform', 'scale-105', 'shadow-lg');
+                }
+            });
+        });
+
+        // Aplicar estilo inicial a picks ya seleccionados
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('input[type="radio"]:checked').forEach(radio => {
+                const selectedLabel = radio.nextElementSibling;
+                selectedLabel.classList.remove('border-gray-200', 'bg-white');
+                selectedLabel.classList.add('bg-nflgreen', 'text-white', 'border-nflgreen', 'transform', 'scale-105', 'shadow-lg');
+            });
+        });
+    </script>
+</body>
+</html>

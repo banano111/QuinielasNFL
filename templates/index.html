@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <Title>Dashboard - Quiniela NFL</Title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        nflblue: '#03045E',
+                        nflgray: '#E9ECEF',
+                        nflgreen: '#28A745',
+                        nflred: '#DC3545',
+                        nflorange: '#FF8A00',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation Header -->
+    <nav class="bg-nflblue shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center">
+                        <svg class="h-10 w-10 text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                        </svg>
+                        <h1 class="text-xl font-bold text-white">Quiniela NFL</h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-white text-sm">
+                        Bienvenido, <strong>{{ session.username }}</strong>
+                    </span>
+                    {% if session.is_admin %}
+                        <a href="{{ url_for('admin_panel') }}" 
+                           class="text-white hover:text-nflorange px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                            Admin
+                        </a>
+                    {% endif %}
+                    <a href="{{ url_for('picks_form') }}" 
+                       class="bg-nflgreen hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                        Hacer Picks
+                    </a>
+                    <a href="{{ url_for('logout') }}" 
+                       class="bg-nflred hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                        Cerrar Sesión
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Header con estadísticas principales -->
+        <div class="bg-gradient-to-r from-nflblue to-blue-600 rounded-lg shadow-xl mb-8 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold text-white mb-2">Dashboard NFL</h1>
+                    <p class="text-blue-100">Semana {{ current_week }} - Temporada 2025</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-6xl mb-2">🏈</div>
+                    <p class="text-blue-100 text-sm">¡Es tiempo de football!</p>
+                </div>
+            </div>
+            
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                    <div class="text-2xl font-bold text-white">{{ users_count }}</div>
+                    <div class="text-blue-100 text-sm">Participantes</div>
+                </div>
+                <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                    <div class="text-2xl font-bold text-white">{{ current_week }}</div>
+                    <div class="text-blue-100 text-sm">Semana Actual</div>
+                </div>
+                <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                    <div class="text-2xl font-bold text-white">
+                        {% if user_has_submitted_picks %}
+                            ✅
+                        {% else %}
+                            ⏳
+                        {% endif %}
+                    </div>
+                    <div class="text-blue-100 text-sm">
+                        {% if user_has_submitted_picks %}
+                            Picks enviados
+                        {% else %}
+                            Picks pendientes
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-6 space-y-2">
+                    {% for category, message in messages %}
+                        <div class="rounded-md p-4 {% if category == 'error' %}bg-red-50 border border-red-200 text-red-800{% elif category == 'success' %}bg-green-50 border border-green-200 text-green-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %}">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    {% if category == 'error' %}
+                                        <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    {% elif category == 'success' %}
+                                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    {% else %}
+                                        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    {% endif %}
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium">{{ message }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Partidos de la semana con marcadores -->
+        <div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+            <div class="bg-gradient-to-r from-nflblue to-blue-700 px-6 py-4">
+                <h3 class="text-xl font-semibold text-white flex items-center">
+                    <svg class="h-6 w-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                    </svg>
+                    Partidos de la Semana {{ current_week }}
+                </h3>
+            </div>
+            <div id="games-status" 
+                 hx-get="{{ url_for('games_status') }}" 
+                 hx-trigger="load, every 60s" 
+                 hx-swap="innerHTML">
+                <div class="p-8 text-center">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-nflblue mx-auto"></div>
+                    <p class="text-gray-500 mt-4">Cargando partidos y marcadores...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- Panel principal de acción -->
+            <div class="lg:col-span-1 bg-white rounded-lg shadow-md p-4 border border-gray-200 hover:shadow-lg transition-shadow duration-300 flex items-center justify-center min-h-[280px]">
+                <div class="text-center max-w-xs mx-auto">
+                    <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full {% if user_has_submitted_picks %}bg-green-500{% else %}bg-nflgreen{% endif %} mb-3 shadow-lg">
+                        {% if user_has_submitted_picks %}
+                            <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        {% else %}
+                            <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                        {% endif %}
+                    </div>
+                    
+                    {% if user_has_submitted_picks %}
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">¡Picks Enviados!</h3>
+                        <p class="text-sm text-gray-600 mb-4">
+                            Selecciones enviadas para la semana {{ current_week }}.
+                        </p>
+                        <div class="flex justify-center">
+                            <a href="{{ url_for('picks_form') }}" 
+                               class="inline-block bg-nflblue hover:bg-blue-700 text-white font-bold py-2 px-4 text-sm rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg">
+                                Ver/Modificar Picks
+                            </a>
+                        </div>
+                    {% else %}
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Hacer tus Picks</h3>
+                        <p class="text-sm text-gray-600 mb-4">
+                            Partidos disponibles para la semana {{ current_week }}.
+                        </p>
+                        <div class="flex justify-center">
+                            <a href="{{ url_for('picks_form') }}" 
+                               class="inline-block bg-nflgreen hover:bg-green-700 text-white font-bold py-2 px-4 text-sm rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg animate-pulse">
+                                Hacer Picks Ahora
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Estado de tus picks -->
+            <div class="lg:col-span-2 bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow duration-300">
+                <div class="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-4">
+                    <h3 class="text-lg font-semibold text-white flex items-center">
+                        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Mis Picks - Semana {{ current_week }}
+                    </h3>
+                </div>
+                <div id="user-picks-status" 
+                     hx-get="{{ url_for('user_picks_status') }}" 
+                     hx-trigger="load, every 30s" 
+                     hx-swap="innerHTML"
+                     class="overflow-hidden">
+                    <div class="p-6 text-center w-full">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-nflblue mx-auto"></div>
+                        <p class="text-gray-500 mt-2">Cargando picks...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Picks por Partido -->
+        <div class="mt-8">
+            <div class="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow duration-300">
+                <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
+                    <h3 class="text-lg font-semibold text-white flex items-center">
+                        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                        </svg>
+                        Cuadrícula de Picks - Semana {{ current_week }}
+                    </h3>
+                </div>
+                <div id="picks-grid-table" 
+                     hx-get="{{ url_for('picks_grid_partial') }}" 
+                     hx-trigger="load" 
+                     hx-swap="innerHTML">
+                    <div class="p-6 text-center">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
+                        <p class="text-gray-500 mt-2">Cargando cuadrícula...</p>
+                    </div>
+                </div>
+                
+                <!-- Legend -->
+                <div class="px-6 py-3 bg-gray-50 border-t">
+                    <div class="flex items-center justify-center space-x-6 text-xs text-gray-500">
+                        <div class="flex items-center space-x-1">
+                            <span class="text-green-500">✓</span>
+                            <span>Correcto</span>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <span class="text-red-500">✗</span>
+                            <span>Incorrecto</span>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <span class="text-gray-400">○</span>
+                            <span>Pendiente</span>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <span class="text-gray-300">-</span>
+                            <span>Sin Pick</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clasificación y estadísticas -->
+        <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Clasificación actual -->
+            <div class="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow duration-300">
+                <div class="bg-gradient-to-r from-yellow-400 to-yellow-600 px-6 py-4">
+                    <h3 class="text-lg font-semibold text-white flex items-center">
+                        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path>
+                        </svg>
+                        Clasificación Semana {{ current_week }}
+                    </h3>
+                </div>
+                <div id="standings-table" 
+                     hx-get="{{ url_for('standings') }}" 
+                     hx-trigger="load, every 30s" 
+                     hx-swap="innerHTML">
+                    <div class="p-6 text-center">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto"></div>
+                        <p class="text-gray-500 mt-2">Cargando clasificación...</p>
+                    </div>
+                </div>
+                <div class="px-6 pb-4">
+                    <div class="flex justify-center">
+                        <button onclick="htmx.trigger('#standings-table', 'refresh')" 
+                                class="inline-block bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 text-sm">
+                            Actualizar Tabla
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Historial de ganadores -->
+            <div class="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow duration-300">
+                <div class="bg-gradient-to-r from-purple-500 to-purple-700 px-6 py-4">
+                    <h3 class="text-lg font-semibold text-white flex items-center">
+                        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Historial de Ganadores
+                    </h3>
+                </div>
+                <div class="p-6">
+                    {% if winners_history %}
+                        <div class="space-y-3">
+                            {% for winner in winners_history %}
+                                <div class="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors duration-200">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="flex-shrink-0">
+                                            <div class="h-10 w-10 bg-purple-500 rounded-full flex items-center justify-center shadow-md">
+                                                <span class="text-white text-sm font-bold">{{ winner.week }}</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-semibold text-gray-900">{{ winner.username }}</p>
+                                            <p class="text-xs text-gray-500">Semana {{ winner.week }}</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-lg font-bold text-purple-700">{{ winner.score }} pts</p>
+                                        <p class="text-xs text-purple-500">🏆 Ganador</p>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div class="mt-4 flex justify-center">
+                            <a href="#" 
+                               class="inline-block bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 text-sm">
+                                Ver Historial Completo
+                            </a>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                            </svg>
+                            <p class="text-gray-500 mt-2 mb-4">Aún no hay ganadores registrados</p>
+                            <div class="flex justify-center">
+                                <span class="inline-block bg-gray-300 text-gray-600 font-medium py-2 px-6 rounded-lg text-sm cursor-not-allowed">
+                                    ¡Sé el primero en ganar!
+                                </span>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Información adicional -->
+        <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-lg font-medium text-blue-900">¿Cómo funciona?</h3>
+                    <div class="mt-2 text-sm text-blue-800">
+                        <ul class="list-disc list-inside space-y-1">
+                            <li>Selecciona el equipo ganador para cada partido de la semana</li>
+                            <li>Envía tus picks antes del inicio de la primera fecha</li>
+                            <li>Gana 1 punto por cada predicción correcta</li>
+                            <li>El usuario con más puntos gana la semana</li>
+                            <li>¡Puedes modificar tus picks hasta el último momento!</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center text-sm text-gray-500">
+            <p>Última actualización: {{ last_updated }}</p>
+            <p class="mt-1">© 2025 Quiniela NFL. Hecho con ❤️ para los fanáticos del fútbol americano.</p>
+        </div>
+    </div>
+
+    <!-- HTMX JavaScript para auto-refresh -->
+    <script>
+        // Auto-refresh manual adicional para asegurar datos actualizados
+        setInterval(function() {
+            htmx.trigger('#user-picks-status', 'refresh');
+            htmx.trigger('#standings-table', 'refresh');
+        }, 60000); // Refresh cada minuto
+
+        // Indicador visual cuando HTMX está cargando
+        document.body.addEventListener('htmx:beforeRequest', function(event) {
+            const target = event.target;
+            if (target.id === 'user-picks-status' || target.id === 'standings-table') {
+                target.style.opacity = '0.7';
+            }
+        });
+
+        document.body.addEventListener('htmx:afterRequest', function(event) {
+            const target = event.target;
+            if (target.id === 'user-picks-status' || target.id === 'standings-table') {
+                target.style.opacity = '1';
+            }
+        });
+    </script>
+</body>
+</html>
