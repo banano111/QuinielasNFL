@@ -101,7 +101,7 @@
                     </div>
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-600">Total Usuarios</p>
-                        <p class="text-2xl font-bold text-gray-900">{{ total_users }}</p>
+                        <p class="text-2xl font-bold text-gray-900" data-stat="total-users">{{ total_users }}</p>
                     </div>
                 </div>
             </div>
@@ -116,7 +116,7 @@
                     </div>
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-600">Picks Enviados</p>
-                        <p class="text-2xl font-bold text-gray-900">{{ picks_submitted }} / {{ total_users }}</p>
+                        <p class="text-2xl font-bold text-gray-900" data-stat="picks-submitted">{{ picks_submitted }} / {{ total_users }}</p>
                     </div>
                 </div>
             </div>
@@ -131,7 +131,7 @@
                     </div>
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-600">Semana Actual</p>
-                        <p class="text-2xl font-bold text-gray-900">{{ current_week }}</p>
+                        <p class="text-2xl font-bold text-gray-900" data-stat="current-week">{{ current_week }}</p>
                     </div>
                 </div>
             </div>
@@ -139,20 +139,18 @@
             <!-- Estado de picks -->
             <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
                 <div class="flex items-center">
-                    <div class="p-2 {% if config and config.picks_locked %}bg-red-100{% else %}bg-green-100{% endif %} rounded-lg">
-                        {% if config and config.picks_locked %}
-                            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="p-2 {% if config and config.picks_locked %}bg-red-100{% else %}bg-green-100{% endif %} rounded-lg" data-container="picks-status">
+                        <svg class="w-6 h-6 {% if config and config.picks_locked %}text-red-600{% else %}text-green-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" data-icon="picks-status">
+                            {% if config and config.picks_locked %}
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                            </svg>
-                        {% else %}
-                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {% else %}
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path>
-                            </svg>
-                        {% endif %}
+                            {% endif %}
+                        </svg>
                     </div>
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-600">Estado Picks</p>
-                        <p class="text-2xl font-bold {% if config and config.picks_locked %}text-red-600{% else %}text-green-600{% endif %}">
+                        <p class="text-2xl font-bold {% if config and config.picks_locked %}text-red-600{% else %}text-green-600{% endif %}" data-stat="picks-status">
                             {% if config and config.picks_locked %}Bloqueados{% else %}Abiertos{% endif %}
                         </p>
                     </div>
@@ -220,10 +218,34 @@
                             </p>
                         </div>
                         <button type="submit" 
-                                class="px-4 py-2 {% if config and config.picks_locked %}bg-green-600 hover:bg-green-700{% else %}bg-red-600 hover:bg-red-700{% endif %} text-white font-medium rounded-md transition-colors duration-200">
-                            {% if config and config.picks_locked %}Desbloquear{% else %}Bloquear{% endif %}
+                                class="px-4 py-2 {% if config and config.picks_locked %}bg-green-600 hover:bg-green-700{% else %}bg-red-600 hover:bg-red-700{% endif %} text-white font-medium rounded-md transition-colors duration-200" 
+                                data-button="toggle-picks">
+                            <span data-text="toggle-picks">{% if config and config.picks_locked %}Desbloquear{% else %}Bloquear{% endif %}</span>
                         </button>
                     </form>
+                </div>
+                
+                <!-- Control de ligas -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-medium text-gray-900 mb-3">Gestión de Ligas</h4>
+                    <div class="flex gap-3">
+                        <button hx-get="{{ url_for('admin_create_league') }}" 
+                                hx-target="body" 
+                                hx-swap="beforeend"
+                                class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md transition-colors duration-200">
+                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Crear Liga
+                        </button>
+                        <a href="{{ url_for('admin_leagues') }}" 
+                           class="flex-1 text-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors duration-200">
+                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                            Ver Ligas
+                        </a>
+                    </div>
                 </div>
             </div>
             
@@ -240,7 +262,7 @@
                     </div>
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-600">Resultados</p>
-                        <p class="text-2xl font-bold text-gray-900">{{ processed_results }}</p>
+                        <p class="text-2xl font-bold text-gray-900" data-stat="processed-results">{{ processed_results }}</p>
                     </div>
                 </div>
             </div>
@@ -538,5 +560,80 @@
     
     <!-- Modal container -->
     <div id="standings-modal"></div>
+
+    <script>
+        // Función para actualizar las estadísticas del dashboard
+        function updateAdminStats() {
+            fetch('/admin/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error updating stats:', data.error);
+                        return;
+                    }
+                    
+                    // Actualizar estadísticas
+                    document.querySelector('[data-stat="total-users"]').textContent = data.total_users;
+                    document.querySelector('[data-stat="picks-submitted"]').textContent = `${data.picks_submitted} / ${data.total_users}`;
+                    document.querySelector('[data-stat="current-week"]').textContent = data.current_week;
+                    document.querySelector('[data-stat="processed-results"]').textContent = data.processed_results;
+                    
+                    // Actualizar estado de picks
+                    const picksStatusElement = document.querySelector('[data-stat="picks-status"]');
+                    const picksIconElement = document.querySelector('[data-icon="picks-status"]');
+                    const picksContainerElement = document.querySelector('[data-container="picks-status"]');
+                    
+                    if (picksStatusElement && picksIconElement && picksContainerElement) {
+                        picksStatusElement.textContent = data.picks_locked_text;
+                        
+                        if (data.picks_locked) {
+                            picksStatusElement.className = 'text-2xl font-bold text-red-600';
+                            picksContainerElement.className = 'p-2 bg-red-100 rounded-lg';
+                        } else {
+                            picksStatusElement.className = 'text-2xl font-bold text-green-600';
+                            picksContainerElement.className = 'p-2 bg-green-100 rounded-lg';
+                        }
+                    }
+                    
+                    // Actualizar campo de semana
+                    const weekInput = document.getElementById('week');
+                    if (weekInput) {
+                        weekInput.value = data.current_week;
+                    }
+                    
+                    // Actualizar texto del botón de toggle picks
+                    const toggleButton = document.querySelector('[data-button="toggle-picks"]');
+                    const toggleText = document.querySelector('[data-text="toggle-picks"]');
+                    if (toggleButton && toggleText) {
+                        if (data.picks_locked) {
+                            toggleButton.className = 'px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md transition-colors duration-200';
+                            toggleText.textContent = 'Desbloquear';
+                        } else {
+                            toggleButton.className = 'px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md transition-colors duration-200';
+                            toggleText.textContent = 'Bloquear';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching admin stats:', error);
+                });
+        }
+
+        // Actualizar estadísticas cada 30 segundos
+        setInterval(updateAdminStats, 30000);
+
+        // Actualizar después de cualquier acción HTMX
+        document.addEventListener('htmx:afterRequest', function(event) {
+            if (event.detail.successful) {
+                // Esperar un poco antes de actualizar para que la DB se actualice
+                setTimeout(updateAdminStats, 1000);
+            }
+        });
+
+        // Actualización inicial
+        document.addEventListener('DOMContentLoaded', function() {
+            updateAdminStats();
+        });
+    </script>
 </body>
 </html>

@@ -5,6 +5,9 @@ import requests
 import urllib3
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+import threading
+import time
+import json
 
 # Deshabilitar advertencias de SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -44,7 +47,9 @@ def create_tables():
                 username TEXT UNIQUE NOT NULL,
                 password TEXT NOT NULL,
                 is_admin INTEGER NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                current_league_id INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (current_league_id) REFERENCES leagues(id)
             );
         ''')
 
@@ -53,12 +58,14 @@ def create_tables():
             CREATE TABLE IF NOT EXISTS picks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
+                league_id INTEGER NOT NULL DEFAULT 1,
                 week INTEGER NOT NULL,
                 game_id TEXT NOT NULL,
                 selection TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, week, game_id),
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                UNIQUE(user_id, league_id, week, game_id),
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (league_id) REFERENCES leagues(id)
             );
         ''')
 
@@ -96,6 +103,35 @@ def create_tables():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         ''')
+        
+        # Tabla de ligas
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS leagues (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                code TEXT UNIQUE NOT NULL,
+                description TEXT,
+                created_by INTEGER NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                max_members INTEGER DEFAULT 50,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            );
+        ''')
+        
+        # Tabla de membresías de ligas (relación usuarios-ligas)
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS league_memberships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                league_id INTEGER NOT NULL,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active INTEGER DEFAULT 1,
+                UNIQUE(user_id, league_id),
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (league_id) REFERENCES leagues(id)
+            );
+        ''')
 
     # Inserta un usuario administrador por defecto si no existe
     cursor = db.execute('SELECT * FROM users WHERE is_admin = 1;')
@@ -110,6 +146,17 @@ def create_tables():
     if not cursor.fetchone():
         db.execute('INSERT INTO system_config (config_key, config_value) VALUES (?, ?)', ('current_week', '4'))
         db.execute('INSERT INTO system_config (config_key, config_value) VALUES (?, ?)', ('picks_locked', '0'))
+    
+    # Crear liga por defecto si no existe
+    cursor = db.execute('SELECT * FROM leagues WHERE id = 1;')
+    if not cursor.fetchone():
+        db.execute('''INSERT INTO leagues (id, name, code, description, created_by) 
+                     VALUES (1, "Liga Principal", "PRINCIPAL", "Liga por defecto del sistema", 1)''')
+        
+    # Agregar admin a la liga por defecto
+    cursor = db.execute('SELECT * FROM league_memberships WHERE user_id = 1 AND league_id = 1;')
+    if not cursor.fetchone():
+        db.execute('INSERT INTO league_memberships (user_id, league_id) VALUES (1, 1)')
     
     # Migración: Agregar columnas home_team y away_team a game_results si no existen
     try:
@@ -178,6 +225,188 @@ def get_system_config():
         configs[row['config_key']] = row['config_value']
     db.close()
     return configs
+
+def check_and_lock_picks_if_needed():
+    """
+    Verifica si los picks deben cerrarse automáticamente 5 minutos antes del primer partido.
+    """
+    try:
+        current_week = get_current_week()
+        config = get_system_config()
+        
+        # Si ya están bloqueados, no hacer nada
+        if config.get('picks_locked') == '1':
+            return
+        
+        # Obtener los partidos de la semana actual
+        nfl_data = get_espn_nfl_data(current_week)
+        games = nfl_data.get('events', []) if nfl_data else []
+        if not games:
+            return
+        
+        # Encontrar el primer partido de la semana
+        earliest_game = None
+        earliest_time = None
+        
+        for game in games:
+            game_date_str = game.get('date')
+            if game_date_str:
+                try:
+                    # Convertir la fecha del juego
+                    game_time = datetime.strptime(game_date_str, '%Y-%m-%dT%H:%MZ')
+                    if earliest_time is None or game_time < earliest_time:
+                        earliest_time = game_time
+                        earliest_game = game
+                except ValueError:
+                    continue
+        
+        if earliest_time:
+            # Verificar si estamos dentro de los 5 minutos antes del partido
+            now = datetime.utcnow()
+            lock_time = earliest_time - timedelta(minutes=5)
+            
+            if now >= lock_time:
+                # Bloquear picks automáticamente
+                db = get_db()
+                db.execute('UPDATE system_config SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?', 
+                          ('1', 'picks_locked'))
+                db.execute('''INSERT OR REPLACE INTO system_config (config_key, config_value, updated_at) 
+                             VALUES ('auto_locked_at', ?, CURRENT_TIMESTAMP)''', (now.isoformat(),))
+                db.commit()
+                db.close()
+                print(f"Picks bloqueados automáticamente a las {now} para el partido de {earliest_time}")
+    
+    except Exception as e:
+        print(f"Error en check_and_lock_picks_if_needed: {e}")
+
+def start_picks_monitor():
+    """
+    Inicia el monitor que verifica cada minuto si los picks deben cerrarse.
+    """
+    def monitor_loop():
+        while True:
+            try:
+                check_and_lock_picks_if_needed()
+                time.sleep(60)  # Verificar cada minuto
+            except Exception as e:
+                print(f"Error en monitor de picks: {e}")
+                time.sleep(60)
+    
+    monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+    monitor_thread.start()
+    print("Monitor de picks iniciado")
+
+def generate_league_code():
+    """Genera un código único para una liga."""
+    import random
+    import string
+    
+    while True:
+        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        db = get_db()
+        existing = db.execute('SELECT id FROM leagues WHERE code = ?', (code,)).fetchone()
+        db.close()
+        if not existing:
+            return code
+
+def create_league(name, description, created_by_user_id, max_members=50):
+    """Crea una nueva liga."""
+    try:
+        code = generate_league_code()
+        db = get_db()
+        
+        cursor = db.execute('''
+            INSERT INTO leagues (name, code, description, created_by, max_members)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (name, code, description, created_by_user_id, max_members))
+        
+        league_id = cursor.lastrowid
+        
+        # Agregar al creador como miembro de la liga
+        db.execute('''
+            INSERT INTO league_memberships (user_id, league_id)
+            VALUES (?, ?)
+        ''', (created_by_user_id, league_id))
+        
+        db.commit()
+        db.close()
+        
+        return {'success': True, 'league_id': league_id, 'code': code}
+    
+    except Exception as e:
+        print(f"Error creating league: {e}")
+        return {'success': False, 'error': str(e)}
+
+def join_league(user_id, league_code):
+    """Permite a un usuario unirse a una liga usando un código."""
+    try:
+        db = get_db()
+        
+        # Verificar que la liga existe y está activa
+        league = db.execute('''
+            SELECT id, name, max_members 
+            FROM leagues 
+            WHERE code = ? AND is_active = 1
+        ''', (league_code,)).fetchone()
+        
+        if not league:
+            db.close()
+            return {'success': False, 'error': 'Liga no encontrada o inactiva'}
+        
+        # Verificar que el usuario no esté ya en la liga
+        existing = db.execute('''
+            SELECT id FROM league_memberships 
+            WHERE user_id = ? AND league_id = ? AND is_active = 1
+        ''', (user_id, league['id'])).fetchone()
+        
+        if existing:
+            db.close()
+            return {'success': False, 'error': 'Ya eres miembro de esta liga'}
+        
+        # Verificar límite de miembros
+        current_members = db.execute('''
+            SELECT COUNT(*) as count 
+            FROM league_memberships 
+            WHERE league_id = ? AND is_active = 1
+        ''', (league['id'],)).fetchone()['count']
+        
+        if current_members >= league['max_members']:
+            db.close()
+            return {'success': False, 'error': 'La liga está llena'}
+        
+        # Agregar usuario a la liga
+        db.execute('''
+            INSERT INTO league_memberships (user_id, league_id)
+            VALUES (?, ?)
+        ''', (user_id, league['id']))
+        
+        # Actualizar liga actual del usuario
+        db.execute('''
+            UPDATE users SET current_league_id = ? WHERE id = ?
+        ''', (league['id'], user_id))
+        
+        db.commit()
+        db.close()
+        
+        return {'success': True, 'league_name': league['name']}
+    
+    except Exception as e:
+        print(f"Error joining league: {e}")
+        return {'success': False, 'error': str(e)}
+
+def get_user_leagues(user_id):
+    """Obtiene todas las ligas de un usuario."""
+    db = get_db()
+    leagues = db.execute('''
+        SELECT l.id, l.name, l.code, l.description, lm.joined_at,
+               (SELECT COUNT(*) FROM league_memberships WHERE league_id = l.id AND is_active = 1) as member_count
+        FROM leagues l
+        JOIN league_memberships lm ON l.id = lm.league_id
+        WHERE lm.user_id = ? AND lm.is_active = 1
+        ORDER BY lm.joined_at DESC
+    ''', (user_id,)).fetchall()
+    db.close()
+    return leagues
 
 
 def get_espn_nfl_data(week=None):
@@ -994,7 +1223,7 @@ def declare_winner():
 
 @app.route('/admin/update_week', methods=['POST'])
 def update_current_week():
-    """Actualiza la semana actual."""
+    """Actualiza la semana actual y desbloquea automáticamente los picks."""
     if 'user_id' not in session or not session.get('is_admin'):
         return render_template('toast_partial.html', 
                              category='error', 
@@ -1008,15 +1237,21 @@ def update_current_week():
     
     try:
         db = get_db()
-        db.execute('UPDATE system_config SET current_week = ?, updated_at = CURRENT_TIMESTAMP', (new_week,))
+        # Corregir la consulta SQL - usar config_value en lugar de current_week
+        db.execute('UPDATE system_config SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?', (str(new_week), 'current_week'))
+        
+        # Desbloquear picks automáticamente cuando se cambia la semana
+        db.execute('UPDATE system_config SET config_value = ? WHERE config_key = ?', ('0', 'picks_locked'))
+        
         db.commit()
         db.close()
         
         return render_template('toast_partial.html', 
                              category='success', 
-                             message=f'Semana actualizada a {new_week}')
+                             message=f'Semana actualizada a {new_week} y picks desbloqueados automáticamente')
     
-    except Exception:
+    except Exception as e:
+        print(f"Error al actualizar semana: {e}")  # Para debug
         return render_template('toast_partial.html', 
                              category='error', 
                              message='Error al actualizar semana')
@@ -1035,19 +1270,205 @@ def toggle_picks_lock():
         current_state = int(config['config_value']) if config else 0
         new_state = 0 if current_state else 1
         
-        db.execute('UPDATE system_config SET config_value = ? WHERE config_key = ?', (str(new_state), 'picks_locked'))
+        # Actualizar el estado de bloqueo
+        db.execute('UPDATE system_config SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?', (str(new_state), 'picks_locked'))
+        
+        # Si estamos desbloqueando, también actualizar la fecha de último desbloqueo
+        if new_state == 0:
+            db.execute('''INSERT OR REPLACE INTO system_config (config_key, config_value, updated_at) 
+                         VALUES ('picks_unlocked_at', datetime('now'), CURRENT_TIMESTAMP)''')
+        
         db.commit()
         db.close()
         
         status_text = 'bloqueados' if new_state else 'desbloqueados'
         return render_template('toast_partial.html', 
                              category='success', 
-                             message=f'Picks {status_text}')
+                             message=f'Picks {status_text} correctamente')
     
-    except Exception:
+    except Exception as e:
+        print(f"Error al cambiar estado de picks: {e}")  # Para debug
         return render_template('toast_partial.html', 
                              category='error', 
                              message='Error al cambiar estado de picks')
+
+@app.route('/admin/create_league', methods=['GET', 'POST'])
+def admin_create_league():
+    """Crear una nueva liga (solo admin)."""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return render_template('toast_partial.html', 
+                             category='error', 
+                             message='Acceso denegado')
+    
+    if request.method == 'GET':
+        return render_template('create_league_modal.html')
+    
+    # POST - Crear liga
+    name = request.form.get('name', '').strip()
+    description = request.form.get('description', '').strip()
+    max_members = request.form.get('max_members', 50, type=int)
+    
+    if not name:
+        return render_template('toast_partial.html', 
+                             category='error', 
+                             message='El nombre de la liga es requerido')
+    
+    if max_members < 2 or max_members > 100:
+        return render_template('toast_partial.html', 
+                             category='error', 
+                             message='El límite de miembros debe estar entre 2 y 100')
+    
+    result = create_league(name, description, session['user_id'], max_members)
+    
+    if result['success']:
+        return render_template('toast_partial.html', 
+                             category='success', 
+                             message=f'Liga "{name}" creada exitosamente. Código: {result["code"]}')
+    else:
+        return render_template('toast_partial.html', 
+                             category='error', 
+                             message=f'Error al crear liga: {result["error"]}')
+
+@app.route('/admin/leagues')
+def admin_leagues():
+    """Ver todas las ligas (solo admin)."""
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Acceso denegado', 'error')
+        return redirect(url_for('login'))
+    
+    db = get_db()
+    leagues = db.execute('''
+        SELECT l.*, u.username as creator_name,
+               (SELECT COUNT(*) FROM league_memberships WHERE league_id = l.id AND is_active = 1) as member_count
+        FROM leagues l
+        JOIN users u ON l.created_by = u.id
+        ORDER BY l.created_at DESC
+    ''').fetchall()
+    db.close()
+    
+    return render_template('admin_leagues.html', leagues=leagues)
+
+@app.route('/join_league', methods=['GET', 'POST'])
+def join_league_route():
+    """Permite al usuario unirse a una liga con código."""
+    if 'user_id' not in session:
+        flash('Debes iniciar sesión', 'error')
+        return redirect(url_for('login'))
+    
+    if request.method == 'GET':
+        return render_template('join_league_modal.html')
+    
+    # POST - Unirse a liga
+    league_code = request.form.get('code', '').strip().upper()
+    
+    if not league_code:
+        return render_template('toast_partial.html', 
+                             category='error', 
+                             message='El código de liga es requerido')
+    
+    result = join_league(session['user_id'], league_code)
+    
+    if result['success']:
+        return render_template('toast_partial.html', 
+                             category='success', 
+                             message=f'Te has unido exitosamente a "{result["league_name"]}"')
+    else:
+        return render_template('toast_partial.html', 
+                             category='error', 
+                             message=result['error'])
+
+@app.route('/my_leagues')
+def my_leagues():
+    """Ver las ligas del usuario."""
+    if 'user_id' not in session:
+        flash('Debes iniciar sesión', 'error')
+        return redirect(url_for('login'))
+    
+    leagues = get_user_leagues(session['user_id'])
+    return render_template('my_leagues.html', leagues=leagues)
+
+@app.route('/admin/stats')
+def admin_stats():
+    """Retorna las estadísticas actualizadas del dashboard de admin."""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Acceso denegado'}), 403
+    
+    try:
+        db = get_db()
+        current_week = get_current_week()
+        config = get_system_config()
+        
+        # Total usuarios
+        total_users = db.execute('SELECT COUNT(*) as count FROM users').fetchone()['count']
+        
+        # Picks enviados esta semana
+        picks_submitted = db.execute(
+            'SELECT COUNT(DISTINCT user_id) as count FROM picks WHERE week = ?', 
+            (current_week,)
+        ).fetchone()['count']
+        
+        # Resultados procesados
+        processed_results = db.execute(
+            'SELECT COUNT(*) as count FROM game_results WHERE week = ?', 
+            (current_week,)
+        ).fetchone()['count']
+        
+        db.close()
+        
+        return jsonify({
+            'total_users': total_users,
+            'picks_submitted': picks_submitted,
+            'processed_results': processed_results,
+            'current_week': current_week,
+            'picks_locked': config.get('picks_locked', '0') == '1',
+            'picks_locked_text': 'Bloqueados' if config.get('picks_locked', '0') == '1' else 'Abiertos'
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/stats')
+def admin_stats_api():
+    """API endpoint para obtener estadísticas del admin dinámicamente."""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Acceso denegado'}), 403
+    
+    try:
+        db = get_db()
+        config = get_system_config()
+        current_week = get_current_week()
+        
+        # Total de usuarios
+        total_users = db.execute('SELECT COUNT(*) as count FROM users WHERE is_admin = 0').fetchone()['count']
+        
+        # Picks enviados para la semana actual
+        picks_submitted = db.execute('''
+            SELECT COUNT(DISTINCT user_id) as count 
+            FROM picks 
+            WHERE week = ?
+        ''', (current_week,)).fetchone()['count']
+        
+        # Resultados procesados
+        processed_results = db.execute('SELECT COUNT(*) as count FROM game_results').fetchone()['count']
+        
+        # Estado de picks
+        picks_locked = config.get('picks_locked', '0') == '1'
+        picks_locked_text = 'Bloqueados' if picks_locked else 'Abiertos'
+        
+        db.close()
+        
+        return jsonify({
+            'total_users': total_users,
+            'picks_submitted': picks_submitted,
+            'current_week': current_week,
+            'processed_results': processed_results,
+            'picks_locked': picks_locked,
+            'picks_locked_text': picks_locked_text
+        })
+        
+    except Exception as e:
+        print(f"Error en admin_stats_api: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
 
 @app.route('/games_status')
 def games_status():
@@ -1073,8 +1494,14 @@ def games_status():
 # Esto garantiza que funcione tanto en desarrollo como en producción (PythonAnywhere)
 init_db()
 
+# Inicializar base de datos y monitor al cargar la aplicación
+create_tables()
+
 if __name__ == '__main__':
     import os
+    # Inicializar el monitor de picks automático
+    start_picks_monitor()
+    
     # Para desarrollo local
     if os.environ.get('ENVIRONMENT') == 'development':
         app.run(debug=True)
