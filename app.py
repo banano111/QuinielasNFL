@@ -5,8 +5,6 @@ import requests
 import urllib3
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-import threading
-import time
 import json
 
 # Deshabilitar advertencias de SSL
@@ -226,75 +224,7 @@ def get_system_config():
     db.close()
     return configs
 
-def check_and_lock_picks_if_needed():
-    """
-    Verifica si los picks deben cerrarse automáticamente 5 minutos antes del primer partido.
-    """
-    try:
-        current_week = get_current_week()
-        config = get_system_config()
-        
-        # Si ya están bloqueados, no hacer nada
-        if config.get('picks_locked') == '1':
-            return
-        
-        # Obtener los partidos de la semana actual
-        nfl_data = get_espn_nfl_data(current_week)
-        games = nfl_data.get('events', []) if nfl_data else []
-        if not games:
-            return
-        
-        # Encontrar el primer partido de la semana
-        earliest_game = None
-        earliest_time = None
-        
-        for game in games:
-            game_date_str = game.get('date')
-            if game_date_str:
-                try:
-                    # Convertir la fecha del juego
-                    game_time = datetime.strptime(game_date_str, '%Y-%m-%dT%H:%MZ')
-                    if earliest_time is None or game_time < earliest_time:
-                        earliest_time = game_time
-                        earliest_game = game
-                except ValueError:
-                    continue
-        
-        if earliest_time:
-            # Verificar si estamos dentro de los 5 minutos antes del partido
-            now = datetime.utcnow()
-            lock_time = earliest_time - timedelta(minutes=5)
-            
-            if now >= lock_time:
-                # Bloquear picks automáticamente
-                db = get_db()
-                db.execute('UPDATE system_config SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?', 
-                          ('1', 'picks_locked'))
-                db.execute('''INSERT OR REPLACE INTO system_config (config_key, config_value, updated_at) 
-                             VALUES ('auto_locked_at', ?, CURRENT_TIMESTAMP)''', (now.isoformat(),))
-                db.commit()
-                db.close()
-                print(f"Picks bloqueados automáticamente a las {now} para el partido de {earliest_time}")
-    
-    except Exception as e:
-        print(f"Error en check_and_lock_picks_if_needed: {e}")
 
-def start_picks_monitor():
-    """
-    Inicia el monitor que verifica cada minuto si los picks deben cerrarse.
-    """
-    def monitor_loop():
-        while True:
-            try:
-                check_and_lock_picks_if_needed()
-                time.sleep(60)  # Verificar cada minuto
-            except Exception as e:
-                print(f"Error en monitor de picks: {e}")
-                time.sleep(60)
-    
-    monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
-    monitor_thread.start()
-    print("Monitor de picks iniciado")
 
 def generate_league_code():
     """Genera un código único para una liga."""
@@ -1223,7 +1153,7 @@ def declare_winner():
 
 @app.route('/admin/update_week', methods=['POST'])
 def update_current_week():
-    """Actualiza la semana actual y desbloquea automáticamente los picks."""
+    """Actualiza la semana actual y desbloquea automáticamente los picks para la nueva semana."""
     if 'user_id' not in session or not session.get('is_admin'):
         return render_template('toast_partial.html', 
                              category='error', 
@@ -1258,7 +1188,7 @@ def update_current_week():
 
 @app.route('/admin/toggle_picks', methods=['POST'])
 def toggle_picks_lock():
-    """Alterna el estado de bloqueo de picks."""
+    """Alterna el estado de bloqueo de picks (control manual únicamente)."""
     if 'user_id' not in session or not session.get('is_admin'):
         return render_template('toast_partial.html', 
                              category='error', 
@@ -1272,19 +1202,13 @@ def toggle_picks_lock():
         
         # Actualizar el estado de bloqueo
         db.execute('UPDATE system_config SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?', (str(new_state), 'picks_locked'))
-        
-        # Si estamos desbloqueando, también actualizar la fecha de último desbloqueo
-        if new_state == 0:
-            db.execute('''INSERT OR REPLACE INTO system_config (config_key, config_value, updated_at) 
-                         VALUES ('picks_unlocked_at', datetime('now'), CURRENT_TIMESTAMP)''')
-        
         db.commit()
         db.close()
         
         status_text = 'bloqueados' if new_state else 'desbloqueados'
         return render_template('toast_partial.html', 
                              category='success', 
-                             message=f'Picks {status_text} correctamente')
+                             message=f'Picks {status_text} manualmente')
     
     except Exception as e:
         print(f"Error al cambiar estado de picks: {e}")  # Para debug
@@ -1499,9 +1423,6 @@ create_tables()
 
 if __name__ == '__main__':
     import os
-    # Inicializar el monitor de picks automático
-    start_picks_monitor()
-    
     # Para desarrollo local
     if os.environ.get('ENVIRONMENT') == 'development':
         app.run(debug=True)
