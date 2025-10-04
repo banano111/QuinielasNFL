@@ -1,7 +1,6 @@
 Flask==3.0.0
 peewee==3.17.6
-psycopg2-binary==2.9.9
-psycopg2==2.9.9
+pg8000==1.31.2
 requests==2.32.3
 urllib3==2.0.7
 python-dotenv==1.0.1

@@ -1,16 +1,13 @@
 #!/usr/bin/env bash
-# Build script para Render
+# Build script simplificado para Render
 
-echo "🔨 Instalando dependencias del sistema..."
-# Instalar librerías necesarias para PostgreSQL
-apt-get update && apt-get install -y libpq-dev gcc
-
-echo "🔨 Instalando dependencias de Python..."
+echo "� Actualizando pip..."
 pip install --upgrade pip
+
+echo "� Instalando dependencias..."
 pip install -r requirements.txt
 
-echo "🗄️ Configurando base de datos..."
-# Ejecutar migraciones para crear tablas en PostgreSQL
+echo "🗄️ Ejecutando migraciones..."
 python migrate.py
 
-echo "✅ Build completado exitosamente!"
+echo "✅ Build completado!"
