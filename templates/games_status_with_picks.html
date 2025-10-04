@@ -1,0 +1,166 @@
+<!-- Games Status Section with User Picks -->
+<div class="p-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {% for game in games %}
+        <div class="bg-white rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow p-4">
+            
+            <!-- Equipos y Scores -->
+            <div class="flex items-center justify-between mb-3">
+                <!-- Away Team -->
+                <div class="flex flex-col items-center space-y-1">
+                    {% if game.away_logo %}
+                        <img src="{{ game.away_logo }}" alt="{{ game.away_team }}" class="w-8 h-8 object-contain">
+                    {% else %}
+                        <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                            <span class="text-xs text-gray-500">?</span>
+                        </div>
+                    {% endif %}
+                    {% if game.get('status') in ['STATUS_FINAL', 'STATUS_IN_PROGRESS', 'Final', 'Completed'] and game.get('away_score') is not none %}
+                        <span class="text-lg font-bold {{ 'text-yellow-600' if game.get('status') == 'STATUS_IN_PROGRESS' else 'text-gray-900' }}">{{ game.away_score }}</span>
+                    {% else %}
+                        <span class="text-sm text-gray-400">-</span>
+                    {% endif %}
+                </div>
+                
+                <!-- VS o @ con tiempo -->
+                <div class="flex flex-col items-center">
+                    <span class="text-sm font-medium text-gray-400">@</span>
+                    <span class="text-xs text-gray-400 mt-1">{{ game.start_time if game.start_time else 'TBD' }}</span>
+                </div>
+                
+                <!-- Home Team -->
+                <div class="flex flex-col items-center space-y-1">
+                    {% if game.home_logo %}
+                        <img src="{{ game.home_logo }}" alt="{{ game.home_team }}" class="w-8 h-8 object-contain">
+                    {% else %}
+                        <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                            <span class="text-xs text-gray-500">?</span>
+                        </div>
+                    {% endif %}
+                    {% if game.get('status') in ['STATUS_FINAL', 'STATUS_IN_PROGRESS', 'Final', 'Completed'] and game.get('home_score') is not none %}
+                        <span class="text-lg font-bold {{ 'text-yellow-600' if game.get('status') == 'STATUS_IN_PROGRESS' else 'text-gray-900' }}">{{ game.home_score }}</span>
+                    {% else %}
+                        <span class="text-sm text-gray-400">-</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Status -->
+            <div class="flex justify-center mb-3">
+                {% if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed'] %}
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        FINAL
+                    </span>
+                {% elif game.get('status') == 'STATUS_IN_PROGRESS' %}
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 animate-pulse">
+                        🔴 EN VIVO
+                    </span>
+                {% else %}
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                        Programado
+                    </span>
+                {% endif %}
+            </div>
+
+            <!-- User Pick Section -->
+            {% set user_pick = user_picks_by_game.get(game.id) or user_picks_by_game.get(game.id|string) %}
+            {% if user_pick %}
+                <div class="border-t border-gray-200 pt-3">
+                    <div class="text-center">
+                        <p class="text-xs text-gray-500 mb-2">Mi pick:</p>
+                        
+                        <!-- Pick display with team logo -->
+                        <div class="flex items-center justify-center space-x-2 mb-2">
+                            {% set home_team_name = game.home_team.name if game.home_team is mapping else game.home_team %}
+                            {% set away_team_name = game.away_team.name if game.away_team is mapping else game.away_team %}
+                            {% set home_team_abbr = game.home_team.abbreviation if game.home_team is mapping else home_team_name %}
+                            {% set away_team_abbr = game.away_team.abbreviation if game.away_team is mapping else away_team_name %}
+                            
+                            {# Now picked_team is always a dict with name and abbreviation #}
+                            {% set picked_team_name = user_pick.picked_team.name %}
+                            {% set picked_team_abbr = user_pick.picked_team.abbreviation %}
+                            
+                            {% if picked_team_name == home_team_name or picked_team_abbr == home_team_abbr %}
+                                {% if game.home_logo %}
+                                    <img src="{{ game.home_logo }}" alt="{{ home_team_name }}" class="w-6 h-6 object-contain">
+                                {% else %}
+                                    <div class="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
+                                        <span class="text-xs text-gray-500 font-bold">{{ home_team_abbr[:2] }}</span>
+                                    </div>
+                                {% endif %}
+                                <span class="text-xs font-medium">{{ home_team_name }}</span>
+                            {% elif picked_team_name == away_team_name or picked_team_abbr == away_team_abbr %}
+                                {% if game.away_logo %}
+                                    <img src="{{ game.away_logo }}" alt="{{ away_team_name }}" class="w-6 h-6 object-contain">
+                                {% else %}
+                                    <div class="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
+                                        <span class="text-xs text-gray-500 font-bold">{{ away_team_abbr[:2] }}</span>
+                                    </div>
+                                {% endif %}
+                                <span class="text-xs font-medium">{{ away_team_name }}</span>
+                            {% else %}
+                                <div class="w-6 h-6 bg-orange-200 rounded-full flex items-center justify-center">
+                                    <span class="text-xs font-bold">{{ picked_team_abbr[:2] if picked_team_abbr else '?' }}</span>
+                                </div>
+                                <span class="text-xs font-medium text-gray-600">{{ picked_team_name }}</span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Result indicator -->
+                        {% if user_pick.result == 'correct' %}
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-2">
+                                <span class="text-xs font-medium text-green-800 flex items-center justify-center">
+                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    ¡Correcto!
+                                </span>
+                            </div>
+                        {% elif user_pick.result == 'incorrect' %}
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-2">
+                                <span class="text-xs font-medium text-red-800 flex items-center justify-center">
+                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Incorrecto
+                                </span>
+                            </div>
+                        {% else %}
+                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-2">
+                                <span class="text-xs font-medium text-gray-600 flex items-center justify-center">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    Pendiente
+                                </span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% else %}
+                <!-- No pick made -->
+                <div class="border-t border-gray-200 pt-3">
+                    <div class="bg-orange-50 border border-orange-200 rounded-lg p-2">
+                        <span class="text-xs font-medium text-orange-800 flex items-center justify-center">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                            Sin pick
+                        </span>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Last Update Info -->
+<div class="mt-6 mb-4 flex justify-center">
+    <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <p class="text-xs text-gray-600 text-center">
+            Última actualización: 
+            <span class="font-medium">{{ last_update_mex if last_update_mex else 'N/A' }}</span>
+        </p>
+    </div>
+</div>

@@ -61,21 +61,48 @@
     <nav class="bg-nflblue shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
+                <!-- Logo y título -->
                 <div class="flex items-center">
                     <div class="flex-shrink-0 flex items-center">
-                        <svg class="h-10 w-10 text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="h-8 w-8 sm:h-10 sm:w-10 text-white mr-2 sm:mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
                         </svg>
-                        <h1 class="text-xl font-bold text-white">Quiniela NFL</h1>
+                        <h1 class="text-lg sm:text-xl font-bold text-white">Quiniela NFL</h1>
                     </div>
                 </div>
-                <div class="flex items-center space-x-4">
+
+                <!-- Menú desktop -->
+                <div class="hidden md:flex items-center space-x-4">
                     <a href="{{ url_for('home') }}" 
                        class="text-white hover:text-nflorange px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
                         Dashboard
                     </a>
                     <a href="{{ url_for('logout') }}" 
                        class="bg-nflred hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                        Cerrar Sesión
+                    </a>
+                </div>
+
+                <!-- Botón menú móvil -->
+                <div class="md:hidden flex items-center">
+                    <button id="mobile-menu-button" class="text-white hover:text-nflorange focus:outline-none focus:text-nflorange">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                            <path id="close-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" class="hidden"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Menú móvil -->
+            <div id="mobile-menu" class="md:hidden hidden">
+                <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-blue-800">
+                    <a href="{{ url_for('home') }}" 
+                       class="text-white hover:bg-blue-700 block px-3 py-2 rounded-md text-base font-medium">
+                        Dashboard
+                    </a>
+                    <a href="{{ url_for('logout') }}" 
+                       class="bg-nflred hover:bg-red-700 text-white block px-3 py-2 rounded-md text-base font-medium">
                         Cerrar Sesión
                     </a>
                 </div>
@@ -149,21 +176,29 @@
                         </div>
 
                         <div class="p-6">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Desktop layout: Team - VS - Team -->
+                            <div class="hidden md:flex items-center justify-between space-x-4">
                                 <!-- Away Team -->
-                                <div class="relative">
+                                <div class="flex-1">
+                                    {% set away_team_name = game.away_team.name if game.away_team is mapping else game.away_team %}
+                                    {% set away_team_abbr = game.away_team.abbreviation if game.away_team is mapping else away_team_name %}
                                     <input type="radio" 
                                            id="game_{{ game.id }}_away" 
                                            name="game_{{ game.id }}" 
-                                           value="{{ game.away_team }}"
-                                           {% if user_picks.get(game.id|string) == game.away_team %}checked{% endif %}>
+                                           value="{{ away_team_abbr }}"
+                                           {% if user_picks.get(game.id|string) == away_team_abbr or user_picks.get(game.id|string) == away_team_name %}checked{% endif %}
+                                           {% if picks_locked %}disabled{% endif %}>
                                     
                                     <label for="game_{{ game.id }}_away" 
-                                           class="radio-label flex items-center p-4 border-2 border-gray-200 rounded-lg bg-white hover:bg-gray-50">
+                                           class="radio-label flex items-center justify-end p-4 border-2 border-gray-200 rounded-lg bg-white hover:bg-gray-50">
                                         <div class="flex items-center space-x-4">
+                                            <div class="text-right">
+                                                <p class="font-semibold text-gray-900">{{ away_team_name }}</p>
+                                                <p class="text-sm text-gray-500">Visitante</p>
+                                            </div>
                                             {% if game.away_logo %}
                                                 <img src="{{ game.away_logo }}" 
-                                                     alt="{{ game.away_team }}" 
+                                                     alt="{{ away_team_name }}" 
                                                      class="w-12 h-12 object-contain">
                                             {% else %}
                                                 <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
@@ -172,28 +207,32 @@
                                                     </svg>
                                                 </div>
                                             {% endif %}
-                                            <div>
-                                                <p class="font-semibold text-gray-900">{{ game.away_team }}</p>
-                                                <p class="text-sm text-gray-500">Visitante</p>
-                                            </div>
                                         </div>
                                     </label>
                                 </div>
 
+                                <!-- VS indicator -->
+                                <div class="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full px-6 py-3 shadow-lg">
+                                    <span class="text-lg font-bold text-white">VS</span>
+                                </div>
+
                                 <!-- Home Team -->
-                                <div class="relative">
+                                <div class="flex-1">
+                                    {% set home_team_name = game.home_team.name if game.home_team is mapping else game.home_team %}
+                                    {% set home_team_abbr = game.home_team.abbreviation if game.home_team is mapping else home_team_name %}
                                     <input type="radio" 
                                            id="game_{{ game.id }}_home" 
                                            name="game_{{ game.id }}" 
-                                           value="{{ game.home_team }}"
-                                           {% if user_picks.get(game.id|string) == game.home_team %}checked{% endif %}>
+                                           value="{{ home_team_abbr }}"
+                                           {% if user_picks.get(game.id|string) == home_team_abbr or user_picks.get(game.id|string) == home_team_name %}checked{% endif %}
+                                           {% if picks_locked %}disabled{% endif %}>
                                     
                                     <label for="game_{{ game.id }}_home" 
-                                           class="radio-label flex items-center p-4 border-2 border-gray-200 rounded-lg bg-white hover:bg-gray-50">
+                                           class="radio-label flex items-center justify-start p-4 border-2 border-gray-200 rounded-lg bg-white hover:bg-gray-50">
                                         <div class="flex items-center space-x-4">
                                             {% if game.home_logo %}
                                                 <img src="{{ game.home_logo }}" 
-                                                     alt="{{ game.home_team }}" 
+                                                     alt="{{ home_team_name }}" 
                                                      class="w-12 h-12 object-contain">
                                             {% else %}
                                                 <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
@@ -202,8 +241,8 @@
                                                     </svg>
                                                 </div>
                                             {% endif %}
-                                            <div>
-                                                <p class="font-semibold text-gray-900">{{ game.home_team }}</p>
+                                            <div class="text-left">
+                                                <p class="font-semibold text-gray-900">{{ home_team_name }}</p>
                                                 <p class="text-sm text-gray-500">Local</p>
                                             </div>
                                         </div>
@@ -211,32 +250,116 @@
                                 </div>
                             </div>
 
-                            <!-- VS indicator -->
-                            <div class="flex justify-center mt-4">
-                                <div class="bg-gray-100 rounded-full px-4 py-2">
-                                    <span class="text-sm font-bold text-gray-600">VS</span>
+                            <!-- Mobile layout: Teams stacked with VS in center -->
+                            <div class="md:hidden space-y-4">
+                                <!-- Away Team -->
+                                <div class="relative">
+                                    {% set away_team_name_mobile = game.away_team.name if game.away_team is mapping else game.away_team %}
+                                    {% set away_team_abbr_mobile = game.away_team.abbreviation if game.away_team is mapping else away_team_name_mobile %}
+                                    <input type="radio" 
+                                           id="game_{{ game.id }}_away_mobile" 
+                                           name="game_{{ game.id }}" 
+                                           value="{{ away_team_abbr_mobile }}"
+                                           {% if user_picks.get(game.id|string) == away_team_abbr_mobile or user_picks.get(game.id|string) == away_team_name_mobile %}checked{% endif %}
+                                           {% if picks_locked %}disabled{% endif %}>
+                                    
+                                    <label for="game_{{ game.id }}_away_mobile" 
+                                           class="radio-label flex items-center p-4 border-2 border-gray-200 rounded-lg bg-white hover:bg-gray-50 w-full">
+                                        <div class="flex items-center space-x-4 w-full">
+                                            {% if game.away_logo %}
+                                                <img src="{{ game.away_logo }}" 
+                                                     alt="{{ away_team_name_mobile }}" 
+                                                     class="w-12 h-12 object-contain">
+                                            {% else %}
+                                                <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                                                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                                    </svg>
+                                                </div>
+                                            {% endif %}
+                                            <div class="flex-1">
+                                                <p class="font-semibold text-gray-900">{{ away_team_name_mobile }}</p>
+                                                <p class="text-sm text-gray-500">Visitante</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <!-- VS indicator móvil -->
+                                <div class="flex justify-center">
+                                    <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-full px-6 py-2 shadow-lg">
+                                        <span class="text-sm font-bold text-white">VS</span>
+                                    </div>
+                                </div>
+
+                                <!-- Home Team -->
+                                <div class="relative">
+                                    {% set home_team_name_mobile = game.home_team.name if game.home_team is mapping else game.home_team %}
+                                    {% set home_team_abbr_mobile = game.home_team.abbreviation if game.home_team is mapping else home_team_name_mobile %}
+                                    <input type="radio" 
+                                           id="game_{{ game.id }}_home_mobile" 
+                                           name="game_{{ game.id }}" 
+                                           value="{{ home_team_abbr_mobile }}"
+                                           {% if user_picks.get(game.id|string) == home_team_abbr_mobile or user_picks.get(game.id|string) == home_team_name_mobile %}checked{% endif %}
+                                           {% if picks_locked %}disabled{% endif %}>
+                                    
+                                    <label for="game_{{ game.id }}_home_mobile" 
+                                           class="radio-label flex items-center p-4 border-2 border-gray-200 rounded-lg bg-white hover:bg-gray-50 w-full">
+                                        <div class="flex items-center space-x-4 w-full">
+                                            {% if game.home_logo %}
+                                                <img src="{{ game.home_logo }}" 
+                                                     alt="{{ home_team_name_mobile }}" 
+                                                     class="w-12 h-12 object-contain">
+                                            {% else %}
+                                                <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                                                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                                    </svg>
+                                                </div>
+                                            {% endif %}
+                                            <div class="flex-1">
+                                                <p class="font-semibold text-gray-900">{{ home_team_name_mobile }}</p>
+                                                <p class="text-sm text-gray-500">Local</p>
+                                            </div>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
                         </div>
                     </div>
                 {% endfor %}
 
-                <!-- Submit Button -->
+                <!-- Submit Button or Locked Message -->
                 <div class="sticky bottom-0 bg-white p-6 border-t border-gray-200 shadow-lg">
                     <div class="max-w-4xl mx-auto">
-                        <button type="submit" 
-                                class="w-full bg-nflgreen hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nflgreen">
-                            <div class="flex items-center justify-center space-x-2">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                </svg>
-                                <span>Enviar Picks</span>
+                        {% if picks_locked %}
+                            <!-- Mensaje de bloqueo -->
+                            <div class="bg-red-50 border-2 border-red-200 rounded-lg p-6 text-center">
+                                <div class="flex items-center justify-center mb-3">
+                                    <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-bold text-red-700 mb-2">Picks Bloqueados</h3>
+                                <p class="text-red-600 font-medium">Los picks están bloqueados. No puedes hacer cambios.</p>
+                                <p class="text-sm text-red-500 mt-2">Contacta al administrador si necesitas hacer modificaciones.</p>
                             </div>
-                        </button>
-                        
-                        <p class="text-center text-sm text-gray-500 mt-3">
-                            Asegúrate de seleccionar un equipo para cada partido antes de enviar
-                        </p>
+                        {% else %}
+                            <!-- Botón de envío normal -->
+                            <button type="submit" 
+                                    class="w-full bg-nflgreen hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nflgreen">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    <span>Enviar Picks</span>
+                                </div>
+                            </button>
+                            
+                            <p class="text-center text-sm text-gray-500 mt-3">
+                                Asegúrate de seleccionar un equipo para cada partido antes de enviar
+                            </p>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -330,6 +453,40 @@
                 selectedLabel.classList.remove('border-gray-200', 'bg-white');
                 selectedLabel.classList.add('bg-nflgreen', 'text-white', 'border-nflgreen', 'transform', 'scale-105', 'shadow-lg');
             });
+
+            // JavaScript para menú móvil
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            const menuIcon = document.getElementById('menu-icon');
+            const closeIcon = document.getElementById('close-icon');
+
+            if (mobileMenuButton) {
+                mobileMenuButton.addEventListener('click', function() {
+                    const isHidden = mobileMenu.classList.contains('hidden');
+                    
+                    if (isHidden) {
+                        mobileMenu.classList.remove('hidden');
+                        menuIcon.classList.add('hidden');
+                        closeIcon.classList.remove('hidden');
+                    } else {
+                        mobileMenu.classList.add('hidden');
+                        menuIcon.classList.remove('hidden');
+                        closeIcon.classList.add('hidden');
+                    }
+                });
+
+                // Cerrar menú cuando se hace click fuera de él
+                document.addEventListener('click', function(event) {
+                    const isClickInsideMenu = mobileMenu.contains(event.target);
+                    const isClickOnButton = mobileMenuButton.contains(event.target);
+                    
+                    if (!isClickInsideMenu && !isClickOnButton && !mobileMenu.classList.contains('hidden')) {
+                        mobileMenu.classList.add('hidden');
+                        menuIcon.classList.remove('hidden');
+                        closeIcon.classList.add('hidden');
+                    }
+                });
+            }
         });
     </script>
 </body>

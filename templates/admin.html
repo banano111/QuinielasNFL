@@ -21,9 +21,7 @@
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-        }
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
     </style>
 </head>
 
@@ -54,28 +52,14 @@
         </div>
     </nav>
 
-        <!-- Flash Messages -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
                 <div class="mb-6 space-y-2">
                     {% for category, message in messages %}
                         <div class="rounded-md p-4 {% if category == 'error' %}bg-red-50 border border-red-200 text-red-800{% elif category == 'success' %}bg-green-50 border border-green-200 text-green-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %}">
                             <div class="flex">
-                                <div class="flex-shrink-0">
-                                    {% if category == 'error' %}
-                                        <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                                        </svg>
-                                    {% elif category == 'success' %}
-                                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                        </svg>
-                                    {% else %}
-                                        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                                        </svg>
-                                    {% endif %}
-                                </div>
                                 <div class="ml-3">
                                     <p class="text-sm font-medium">{{ message }}</p>
                                 </div>
@@ -87,11 +71,11 @@
         {% endif %}
     {% endwith %}
 
-    <!-- Contenido principal -->
+    <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Stats de administración -->
+        <!-- Statistics Dashboard -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <!-- Total usuarios -->
+            <!-- Total Users -->
             <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
                 <div class="flex items-center">
                     <div class="p-2 bg-blue-100 rounded-lg">
@@ -106,7 +90,7 @@
                 </div>
             </div>
 
-            <!-- Picks enviados esta semana -->
+            <!-- Picks Submitted -->
             <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
                 <div class="flex items-center">
                     <div class="p-2 bg-green-100 rounded-lg">
@@ -115,13 +99,13 @@
                         </svg>
                     </div>
                     <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">Picks Enviados</p>
+                        <p class="text-sm font-medium text-gray-600">Picks Semana <span data-stat="picks-week">{{ current_week }}</span></p>
                         <p class="text-2xl font-bold text-gray-900" data-stat="picks-submitted">{{ picks_submitted }} / {{ total_users }}</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Semana actual -->
+            <!-- Current Week -->
             <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
                 <div class="flex items-center">
                     <div class="p-2 bg-purple-100 rounded-lg">
@@ -136,12 +120,12 @@
                 </div>
             </div>
             
-            <!-- Estado de picks -->
+            <!-- Picks Status -->
             <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
                 <div class="flex items-center">
-                    <div class="p-2 {% if config and config.picks_locked %}bg-red-100{% else %}bg-green-100{% endif %} rounded-lg" data-container="picks-status">
-                        <svg class="w-6 h-6 {% if config and config.picks_locked %}text-red-600{% else %}text-green-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" data-icon="picks-status">
-                            {% if config and config.picks_locked %}
+                    <div class="p-2 {% if picks_locked %}bg-red-100{% else %}bg-green-100{% endif %} rounded-lg">
+                        <svg class="w-6 h-6 {% if picks_locked %}text-red-600{% else %}text-green-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {% if picks_locked %}
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                             {% else %}
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path>
@@ -150,15 +134,15 @@
                     </div>
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-600">Estado Picks</p>
-                        <p class="text-2xl font-bold {% if config and config.picks_locked %}text-red-600{% else %}text-green-600{% endif %}" data-stat="picks-status">
-                            {% if config and config.picks_locked %}Bloqueados{% else %}Abiertos{% endif %}
+                        <p class="text-2xl font-bold {% if picks_locked %}text-red-600{% else %}text-green-600{% endif %}">
+                            {% if picks_locked %}Bloqueados{% else %}Abiertos{% endif %}
                         </p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Controles de administración -->
+        <!-- Admin Controls -->
         <div class="bg-white rounded-lg shadow-lg p-6 mb-8 border border-gray-200">
             <h3 class="text-lg font-semibold text-gray-900 mb-6 flex items-center">
                 <svg class="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -168,472 +152,240 @@
                 Controles de Administración
             </h3>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Control de semana -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Change Week Control -->
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="font-medium text-gray-900 mb-3">Cambiar Semana Actual</h4>
-                    <form hx-post="{{ url_for('update_current_week') }}" 
-                          hx-swap="afterend" 
-                          hx-target="#admin-notifications"
-                          class="flex items-end space-x-3">
-                        <div class="flex-1">
-                            <label for="week" class="block text-sm font-medium text-gray-700 mb-1">
-                                Nueva semana (1-18)
-                            </label>
+                    <h4 class="font-medium text-gray-900 mb-3">Cambiar Semana</h4>
+                    <form hx-post="{{ url_for('admin.update_week') }}" 
+                          hx-target="#notification-area" 
+                          hx-swap="innerHTML">
+                        <div class="flex gap-2">
                             <input type="number" 
-                                   id="week" 
                                    name="week" 
                                    min="1" 
                                    max="18" 
                                    value="{{ current_week }}"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                   class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                            <button type="submit" 
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md">
+                                Cambiar
+                            </button>
                         </div>
+                    </form>
+                </div>
+
+                <!-- Toggle Picks Control -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-medium text-gray-900 mb-3">Estado de Picks</h4>
+                    <form hx-post="{{ url_for('admin.toggle_picks_lock') }}" 
+                          hx-target="#notification-area" 
+                          hx-swap="innerHTML">
                         <button type="submit" 
-                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors duration-200">
-                            Actualizar
+                                class="w-full px-4 py-2 {% if picks_locked %}bg-green-600 hover:bg-green-700{% else %}bg-red-600 hover:bg-red-700{% endif %} text-white font-medium rounded-md">
+                            {% if picks_locked %}Desbloquear Picks{% else %}Bloquear Picks{% endif %}
                         </button>
                     </form>
                 </div>
 
-                <!-- Control de picks -->
+                <!-- Process Results Control -->
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="font-medium text-gray-900 mb-3">Estado de Picks</h4>
-                    <form hx-post="{{ url_for('toggle_picks_lock') }}" 
-                          hx-swap="afterend" 
-                          hx-target="#admin-notifications"
-                          class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm text-gray-600 mb-1">
-                                Los picks están actualmente 
-                                <span class="font-medium {% if config and config.picks_locked %}text-red-600{% else %}text-green-600{% endif %}">
-                                    {% if config and config.picks_locked %}bloqueados{% else %}abiertos{% endif %}
-                                </span>
-                            </p>
-                            <p class="text-xs text-gray-500">
-                                {% if config and config.picks_locked %}
-                                    Los usuarios no pueden hacer picks
-                                {% else %}
-                                    Los usuarios pueden hacer picks
-                                {% endif %}
-                            </p>
+                    <h4 class="font-medium text-gray-900 mb-3">Procesar Resultados</h4>
+                    <form hx-post="{{ url_for('admin.process_results') }}" 
+                          hx-target="#notification-area" 
+                          hx-swap="innerHTML">
+                        <div class="flex gap-2">
+                            <select name="week" class="flex-1 px-3 py-2 border border-gray-300 rounded-md">
+                                {% for week in range(1, 19) %}
+                                    <option value="{{ week }}" {% if week == current_week %}selected{% endif %}>
+                                        Semana {{ week }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" 
+                                    class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md">
+                                Procesar
+                            </button>
                         </div>
-                        <button type="submit" 
-                                class="px-4 py-2 {% if config and config.picks_locked %}bg-green-600 hover:bg-green-700{% else %}bg-red-600 hover:bg-red-700{% endif %} text-white font-medium rounded-md transition-colors duration-200" 
-                                data-button="toggle-picks">
-                            <span data-text="toggle-picks">{% if config and config.picks_locked %}Desbloquear{% else %}Bloquear{% endif %}</span>
-                        </button>
                     </form>
-                </div>
-                
-                <!-- Control de ligas -->
-                <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="font-medium text-gray-900 mb-3">Gestión de Ligas</h4>
-                    <div class="flex gap-3">
-                        <button hx-get="{{ url_for('admin_create_league') }}" 
-                                hx-target="body" 
-                                hx-swap="beforeend"
-                                class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md transition-colors duration-200">
-                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                            </svg>
-                            Crear Liga
-                        </button>
-                        <a href="{{ url_for('admin_leagues') }}" 
-                           class="flex-1 text-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors duration-200">
-                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                            </svg>
-                            Ver Ligas
-                        </a>
-                    </div>
                 </div>
             </div>
             
-            <!-- Área de notificaciones HTMX -->
-            <div id="admin-notifications" class="mt-4"></div>
-
-            <!-- Resultados procesados -->
-            <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
-                <div class="flex items-center">
-                    <div class="p-2 bg-orange-100 rounded-lg">
-                        <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                        </svg>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">Resultados</p>
-                        <p class="text-2xl font-bold text-gray-900" data-stat="processed-results">{{ processed_results }}</p>
-                    </div>
-                </div>
-            </div>
+            <!-- Notification Area -->
+            <div id="notification-area" class="mt-4"></div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Panel de acciones principales -->
-            <div class="lg:col-span-2 space-y-6">
-                <!-- Acciones de gestión -->
-                <div class="bg-white rounded-lg shadow border border-gray-200">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900">Gestión de Resultados</h3>
-                    </div>
-                    <div class="p-6">
-                        <!-- Consultar partidos de una semana -->
-                        <div class="mb-6">
-                            <form hx-get="{{ url_for('admin_view_week_games') }}" 
-                                  hx-target="#week-games-container" 
-                                  hx-swap="innerHTML"
-                                  class="flex gap-3 items-end">
-                                <div class="flex-1">
-                                    <label for="view_week" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Ver Partidos de la Semana
-                                    </label>
-                                    <select name="week" id="view_week" 
-                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-nfl-blue focus:ring-nfl-blue text-sm">
-                                        {% for week in range(1, 19) %}
-                                            <option value="{{ week }}" {% if week == 2 %}selected{% endif %}>
-                                                Semana {{ week }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <button type="submit" 
-                                        class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 transition-colors duration-200">
-                                    Ver Partidos
-                                </button>
-                            </form>
-                        </div>
-
-                        <!-- Contenedor para mostrar partidos de la semana -->
-                        <div id="week-games-container" class="mb-6">
-                            <!-- Los partidos se cargarán aquí -->
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <form hx-post="{{ url_for('process_results') }}" 
-                                  hx-target="#toast-container" 
-                                  hx-swap="innerHTML"
-                                  class="space-y-4">
-                                <div>
-                                    <label for="week" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Procesar Resultados de la Semana
-                                    </label>
-                                    <select name="week" id="week" 
-                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-nfl-blue focus:ring-nfl-blue text-sm">
-                                        {% for week in range(1, 19) %}
-                                            <option value="{{ week }}" {% if week == 2 %}selected{% endif %}>
-                                                Semana {{ week }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <button type="submit" 
-                                        class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-nfl-green hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nfl-green transition-colors duration-200">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                    </svg>
-                                    Procesar Resultados
-                                </button>
-                            </form>
-
-                            <form hx-post="{{ url_for('declare_winner') }}" 
-                                  hx-target="#toast-container" 
-                                  hx-swap="innerHTML"
-                                  class="space-y-4">
-                                <div>
-                                    <label for="winner_week" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Declarar Ganador de la Semana
-                                    </label>
-                                    <select name="week" id="winner_week" 
-                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-nfl-blue focus:ring-nfl-blue text-sm">
-                                        {% for week in range(1, 19) %}
-                                            <option value="{{ week }}" {% if week == current_week %}selected{% endif %}>
-                                                Semana {{ week }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <button type="submit" 
-                                        class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-600 transition-colors duration-200">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"></path>
-                                    </svg>
-                                    Declarar Ganador
-                                </button>
-                            </form>
-                        </div>
-                    </div>
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- League Management -->
+            <div class="bg-white rounded-lg shadow border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Gestión de Ligas</h3>
                 </div>
+                <div class="p-6">
+                    <!-- Create League Form -->
+                    <form hx-post="{{ url_for('admin.create_league') }}" 
+                          hx-target="#leagues-list" 
+                          hx-swap="outerHTML"
+                          class="mb-6 space-y-4">
+                        <h4 class="text-md font-medium text-gray-900">Crear Nueva Liga</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <input type="text" 
+                                   name="league_name" 
+                                   placeholder="Nombre de la liga" 
+                                   required
+                                   class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                            <input type="text" 
+                                   name="league_code" 
+                                   placeholder="Código (ej: NFL2025)" 
+                                   required
+                                   class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 uppercase">
+                        </div>
+                        <textarea name="league_description" 
+                                  placeholder="Descripción (opcional)" 
+                                  rows="2"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"></textarea>
+                        <button type="submit" 
+                                class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md">
+                            Crear Liga
+                        </button>
+                    </form>
 
-                <!-- Gestión de usuarios -->
-                <div class="bg-white rounded-lg shadow border border-gray-200">
-                    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">Usuarios Registrados</h3>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {{ total_users }} usuarios
-                        </span>
-                    </div>
-                    <div class="p-6">
-                        {% if users %}
-                            <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-                                <table class="min-w-full divide-y divide-gray-300">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                                Usuario
-                                            </th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                                Tipo
-                                            </th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                                Picks S{{ current_week }}
-                                            </th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                                Puntuación Total
-                                            </th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
-                                                Acciones
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="bg-white divide-y divide-gray-200">
-                                        {% for user in users %}
-                                            <tr class="hover:bg-gray-50">
-                                                <td class="px-6 py-4 whitespace-nowrap">
-                                                    <div class="flex items-center">
-                                                        <div class="flex-shrink-0 h-8 w-8">
-                                                            <div class="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                                                                <span class="text-sm font-medium text-gray-700">
-                                                                    {{ user.username[0].upper() }}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <div class="ml-4">
-                                                            <div class="text-sm font-medium text-gray-900">
-                                                                {{ user.username }}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap">
-                                                    {% if user.is_admin %}
-                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                                            Admin
-                                                        </span>
-                                                    {% else %}
-                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                                            Usuario
-                                                        </span>
-                                                    {% endif %}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap">
-                                                    {% if user.has_picks %}
-                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                                                            </svg>
-                                                            Enviado
-                                                        </span>
-                                                    {% else %}
-                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                                                            </svg>
-                                                            Pendiente
-                                                        </span>
-                                                    {% endif %}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                                                    {{ user.total_score or 0 }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                    <span class="text-gray-400 text-sm italic">
-                                                        Funcionalidad pendiente
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
+                    <!-- Leagues List -->
+                    <div id="leagues-list">
+                        <h4 class="text-md font-medium text-gray-900 mb-4">Ligas Existentes</h4>
+                        {% if leagues %}
+                            <div class="space-y-2">
+                                {% for league in leagues %}
+                                <div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                                    <div>
+                                        <p class="font-medium text-gray-900">{{ league.name }}</p>
+                                        <p class="text-sm text-gray-500">Código: {{ league.code }} | Miembros: {{ league.member_count }}</p>
+                                    </div>
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {% if league.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                        {% if league.is_active %}Activa{% else %}Inactiva{% endif %}
+                                    </span>
+                                </div>
+                                {% endfor %}
                             </div>
                         {% else %}
-                            <div class="text-center py-8">
-                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                                </svg>
-                                <p class="mt-2 text-sm text-gray-500">No hay usuarios registrados</p>
-                            </div>
+                            <p class="text-gray-500 text-center py-8">No hay ligas creadas</p>
                         {% endif %}
                     </div>
                 </div>
             </div>
 
-            <!-- Sidebar derecho -->
-            <div class="space-y-6">
-                <!-- Acciones rápidas -->
-                <div class="bg-white rounded-lg shadow border border-gray-200">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900">Acciones Rápidas</h3>
-                    </div>
-                    <div class="p-6 space-y-3">
-                        <button hx-get="{{ url_for('standings') }}" 
-                                hx-target="#standings-modal" 
-                                hx-swap="innerHTML"
-                                class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nfl-blue transition-colors duration-200">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                            </svg>
-                            Ver Clasificación
+            <!-- User Management -->
+            <div class="bg-white rounded-lg shadow border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Gestión de Usuarios</h3>
+                </div>
+                <div class="p-6">
+                    <!-- Add User to League -->
+                    <form hx-post="{{ url_for('admin.add_user_to_league') }}" 
+                          hx-target="#notification-area" 
+                          hx-swap="innerHTML"
+                          class="mb-6 space-y-4">
+                        <h4 class="text-md font-medium text-gray-900">Agregar Usuario a Liga</h4>
+                        <select name="user_id" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                            <option value="">Seleccionar usuario</option>
+                            {% for user in users %}
+                                <option value="{{ user.id }}">{{ user.username }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="league_id" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                            <option value="">Seleccionar liga</option>
+                            {% for league in leagues %}
+                                <option value="{{ league.id }}">{{ league.name }} ({{ league.code }})</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md">
+                            Agregar a Liga
                         </button>
-                        
-                        <button disabled 
-                                class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-400 bg-gray-50 cursor-not-allowed transition-colors duration-200">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                            </svg>
-                            Reiniciar Semana (Pendiente)
-                        </button>
-                        
-                        <button disabled 
-                                class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-400 bg-gray-50 cursor-not-allowed transition-colors duration-200">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            Exportar Datos (Pendiente)
-                        </button>
+                    </form>
+
+                    <!-- Users List -->
+                    <div>
+                        <h4 class="text-md font-medium text-gray-900 mb-4">Usuarios Registrados ({{ total_users }})</h4>
+                        {% if users %}
+                            <div class="space-y-2 max-h-96 overflow-y-auto">
+                                {% for user in users %}
+                                <div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                                    <div>
+                                        <p class="font-medium text-gray-900">{{ user.username }}</p>
+                                        <p class="text-sm text-gray-500">
+                                            {% if user.has_picks %}✅ Picks enviados{% else %}⏳ Sin picks{% endif %}
+                                        </p>
+                                    </div>
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {% if user.is_admin %}bg-red-100 text-red-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {% if user.is_admin %}Admin{% else %}Usuario{% endif %}
+                                    </span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-gray-500 text-center py-8">No hay usuarios registrados</p>
+                        {% endif %}
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Configuración -->
-                <div class="bg-white rounded-lg shadow border border-gray-200">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900">Configuración</h3>
-                    </div>
-                    <div class="p-6">
-                        <div class="space-y-4 opacity-50">
-                            <div class="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
-                                <p class="text-sm text-yellow-700">
-                                    <strong>Nota:</strong> Esta sección está en desarrollo. Usa los controles de administración de arriba.
-                                </p>
-                            </div>
-                            <div class="text-center py-8">
-                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                </svg>
-                                <p class="text-gray-500 mt-4">Configuración avanzada en desarrollo</p>
-                                <p class="text-sm text-gray-400 mt-2">Utiliza los controles de administración superiores</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Información del sistema -->
-                <div class="bg-white rounded-lg shadow border border-gray-200">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900">Información del Sistema</h3>
-                    </div>
-                    <div class="p-6 space-y-3 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">Versión:</span>
-                            <span class="text-gray-900 font-medium">1.0.0</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">Base de datos:</span>
-                            <span class="text-gray-900 font-medium">SQLite</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">API:</span>
-                            <span class="text-gray-900 font-medium">ESPN NFL</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">Última actualización:</span>
-                            <span class="text-gray-900 font-medium">{{ last_updated }}</span>
-                        </div>
-                    </div>
+        <!-- Quick Actions -->
+        <div class="mt-8 bg-white rounded-lg shadow border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Acciones Rápidas</h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <button hx-get="{{ url_for('admin.view_week_games') }}?week={{ current_week }}" 
+                            hx-target="#modal-container" 
+                            hx-swap="innerHTML"
+                            class="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+                            data-week-games-button>
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        Ver Juegos Semana
+                    </button>
+                    
+                    <button hx-get="{{ url_for('admin.admin_view_standings') }}" 
+                            hx-target="#modal-container" 
+                            hx-swap="innerHTML"
+                            class="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        Ver Clasificación
+                    </button>
+                    
+                    <button hx-get="{{ url_for('admin.all_memberships') }}" 
+                            hx-target="#modal-container" 
+                            hx-swap="innerHTML"
+                            class="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        Ver Membresías
+                    </button>
+                    
+                    <form hx-post="{{ url_for('admin.declare_winner') }}" 
+                          hx-target="#notification-area" 
+                          hx-swap="innerHTML">
+                        <input type="hidden" name="week" value="{{ current_week }}">
+                        <button type="submit" 
+                                class="w-full flex items-center justify-center px-4 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"></path>
+                            </svg>
+                            <span data-stat="winner-button-text">Declarar Ganador S{{ current_week }}</span>
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Container para toasts -->
-    <div id="toast-container" class="fixed top-4 right-4 z-50"></div>
-    
-    <!-- Modal container -->
-    <div id="standings-modal"></div>
-
-    <script>
-        // Función para actualizar las estadísticas del dashboard
-        function updateAdminStats() {
-            fetch('/admin/stats')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.error('Error updating stats:', data.error);
-                        return;
-                    }
-                    
-                    // Actualizar estadísticas
-                    document.querySelector('[data-stat="total-users"]').textContent = data.total_users;
-                    document.querySelector('[data-stat="picks-submitted"]').textContent = `${data.picks_submitted} / ${data.total_users}`;
-                    document.querySelector('[data-stat="current-week"]').textContent = data.current_week;
-                    document.querySelector('[data-stat="processed-results"]').textContent = data.processed_results;
-                    
-                    // Actualizar estado de picks
-                    const picksStatusElement = document.querySelector('[data-stat="picks-status"]');
-                    const picksIconElement = document.querySelector('[data-icon="picks-status"]');
-                    const picksContainerElement = document.querySelector('[data-container="picks-status"]');
-                    
-                    if (picksStatusElement && picksIconElement && picksContainerElement) {
-                        picksStatusElement.textContent = data.picks_locked_text;
-                        
-                        if (data.picks_locked) {
-                            picksStatusElement.className = 'text-2xl font-bold text-red-600';
-                            picksContainerElement.className = 'p-2 bg-red-100 rounded-lg';
-                        } else {
-                            picksStatusElement.className = 'text-2xl font-bold text-green-600';
-                            picksContainerElement.className = 'p-2 bg-green-100 rounded-lg';
-                        }
-                    }
-                    
-                    // Actualizar campo de semana
-                    const weekInput = document.getElementById('week');
-                    if (weekInput) {
-                        weekInput.value = data.current_week;
-                    }
-                    
-                    // Actualizar texto del botón de toggle picks
-                    const toggleButton = document.querySelector('[data-button="toggle-picks"]');
-                    const toggleText = document.querySelector('[data-text="toggle-picks"]');
-                    if (toggleButton && toggleText) {
-                        if (data.picks_locked) {
-                            toggleButton.className = 'px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md transition-colors duration-200';
-                            toggleText.textContent = 'Desbloquear';
-                        } else {
-                            toggleButton.className = 'px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md transition-colors duration-200';
-                            toggleText.textContent = 'Bloquear';
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching admin stats:', error);
-                });
-        }
-
-        // Actualizar estadísticas cada 30 segundos
-        setInterval(updateAdminStats, 30000);
-
-        // Actualizar después de cualquier acción HTMX
-        document.addEventListener('htmx:afterRequest', function(event) {
-            if (event.detail.successful) {
-                // Esperar un poco antes de actualizar para que la DB se actualice
-                setTimeout(updateAdminStats, 1000);
-            }
-        });
-
-        // Actualización inicial
-        document.addEventListener('DOMContentLoaded', function() {
-            updateAdminStats();
-        });
-    </script>
+    <!-- Modal Container -->
+    <div id="modal-container"></div>
 </body>
 </html>

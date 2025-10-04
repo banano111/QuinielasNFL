@@ -1,1280 +1,822 @@
-import sqlite3
-import hashlib
+"""
+Aplicación Flask para Quinielas NFL - Versión con Peewee ORM
+"""
+
 import os
+import hashlib
 import requests
 import urllib3
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-import json
 
-# Deshabilitar advertencias de SSL
+# Configuración
+from config import config
+from quinielasapp.models import database
+from quinielasapp.models.models import User, League, LeagueMembership, Pick, GameResult, SystemConfig, WinnersHistory
+from quinielasapp.services.database_service import (
+    get_current_week, set_current_week, get_system_config,
+    generate_league_code, join_league_by_code, get_user_leagues,
+    get_user_standings_by_league, check_picks_deadline
+)
+from shared_utils import get_espn_nfl_data, get_mock_nfl_data, hash_password
+
+# Blueprints
+from blueprints.admin_routes import admin_bp
+
+# D        return render_template('games_status_with_picks.html',abilitar advertencias de SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicializa la aplicación Flask
+# Configuración de la aplicación
 app = Flask(__name__)
-# Genera una clave secreta aleatoria para la sesión, esencial para la seguridad
-app.secret_key = os.urandom(24)
 
-# Define el nombre del archivo de la base de datos
-DATABASE = 'quiniela.db'
+# Cargar configuración según el entorno
+config_name = os.environ.get('FLASK_ENV', 'development')
+app.config.from_object(config[config_name])
 
+# Registrar blueprints
+app.register_blueprint(admin_bp)
 
-# --- Lógica de la Base de Datos ---
-
-def get_db():
-    """
-    Función de ayuda para conectar a la base de datos.
-    Cada llamada a esta función abre una nueva conexión.
-    """
-    db = sqlite3.connect(DATABASE)
-    db.row_factory = sqlite3.Row  # Esto permite acceder a las columnas por nombre
-    return db
-
-
-def create_tables():
-    """
-    Crea las tablas de la base de datos si no existen.
-    Esto se ejecuta una sola vez al iniciar la aplicación.
-    """
-    db = get_db()
-    with db:
-        # Tabla de usuarios: guarda username, password hasheada y un flag de administrador
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                is_admin INTEGER NOT NULL DEFAULT 0,
-                current_league_id INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (current_league_id) REFERENCES leagues(id)
-            );
-        ''')
-
-        # Tabla de selecciones (picks) de los usuarios para cada partido
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS picks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                league_id INTEGER NOT NULL DEFAULT 1,
-                week INTEGER NOT NULL,
-                game_id TEXT NOT NULL,
-                selection TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, league_id, week, game_id),
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (league_id) REFERENCES leagues(id)
-            );
-        ''')
-
-        # Tabla para los resultados finales de cada partido
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS game_results (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                week INTEGER NOT NULL,
-                game_id TEXT NOT NULL,
-                winner TEXT NOT NULL,
-                home_team TEXT,
-                away_team TEXT,
-                home_score INTEGER,
-                away_score INTEGER,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        ''')
-
-        # Tabla para el historial de ganadores semanales
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS winners_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                week INTEGER NOT NULL,
-                username TEXT NOT NULL,
-                score INTEGER NOT NULL
-            );
-        ''')
-        
-        # Tabla para configuración del sistema
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS system_config (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                config_key TEXT UNIQUE NOT NULL,
-                config_value TEXT NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        ''')
-        
-        # Tabla de ligas
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS leagues (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                code TEXT UNIQUE NOT NULL,
-                description TEXT,
-                created_by INTEGER NOT NULL,
-                is_active INTEGER DEFAULT 1,
-                max_members INTEGER DEFAULT 50,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (created_by) REFERENCES users(id)
-            );
-        ''')
-        
-        # Tabla de membresías de ligas (relación usuarios-ligas)
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS league_memberships (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                league_id INTEGER NOT NULL,
-                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_active INTEGER DEFAULT 1,
-                UNIQUE(user_id, league_id),
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (league_id) REFERENCES leagues(id)
-            );
-        ''')
-
-    # Inserta un usuario administrador por defecto si no existe
-    cursor = db.execute('SELECT * FROM users WHERE is_admin = 1;')
-    if not cursor.fetchone():
-        # IMPORTANTE: Cambiar esta contraseña por una segura en producción
-        hashed_password = hashlib.sha256('QuinielasNFL2024!'.encode()).hexdigest()
-        db.execute('INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)',
-                   ('admin', hashed_password, 1))
-        
-    # Inserta configuración por defecto si no existe
-    cursor = db.execute('SELECT * FROM system_config WHERE config_key = ?;', ('current_week',))
-    if not cursor.fetchone():
-        db.execute('INSERT INTO system_config (config_key, config_value) VALUES (?, ?)', ('current_week', '4'))
-        db.execute('INSERT INTO system_config (config_key, config_value) VALUES (?, ?)', ('picks_locked', '0'))
-    
-    # Crear liga por defecto si no existe
-    cursor = db.execute('SELECT * FROM leagues WHERE id = 1;')
-    if not cursor.fetchone():
-        db.execute('''INSERT INTO leagues (id, name, code, description, created_by) 
-                     VALUES (1, "Liga Principal", "PRINCIPAL", "Liga por defecto del sistema", 1)''')
-        
-    # Agregar admin a la liga por defecto
-    cursor = db.execute('SELECT * FROM league_memberships WHERE user_id = 1 AND league_id = 1;')
-    if not cursor.fetchone():
-        db.execute('INSERT INTO league_memberships (user_id, league_id) VALUES (1, 1)')
-    
-    # Migración: Agregar columnas home_team y away_team a game_results si no existen
+# Inicializar conexión a base de datos
+def initialize_database():
+    """Inicializar conexión a base de datos"""
     try:
-        db.execute('ALTER TABLE game_results ADD COLUMN home_team TEXT;')
-        db.execute('ALTER TABLE game_results ADD COLUMN away_team TEXT;')
-        print("Columnas home_team y away_team agregadas a game_results")
-    except Exception:
-        # Las columnas ya existen, no hay problema
-        pass
-    
-    # Migración: Actualizar la semana actual si está en 1 o 2 (para instalaciones existentes)
-    try:
-        current_config = db.execute('SELECT config_value FROM system_config WHERE config_key = ?', ('current_week',)).fetchone()
-        if current_config and int(current_config['config_value']) <= 2:
-            db.execute('UPDATE system_config SET config_value = ? WHERE config_key = ?', ('4', 'current_week'))
-            print(f"Semana actualizada de {current_config['config_value']} a 4")
+        if database.is_closed():
+            database.connect()
+        print("✅ Conectado a PostgreSQL con Peewee")
     except Exception as e:
-        print(f"Error actualizando semana: {e}")
-        
-    db.commit()
-    db.close()
+        print(f"❌ Error conectando a base de datos: {e}")
 
+@app.before_request
+def before_request():
+    """Asegurar conexión antes de cada request"""
+    if database.is_closed():
+        database.connect()
 
-def init_db():
-    """
-    Inicializa la base de datos creando todas las tablas necesarias.
-    Esta función es llamada automáticamente cuando se importa el módulo.
-    """
-    create_tables()
+@app.teardown_appcontext
+def close_database_connection(exception):
+    """Cerrar conexión a base de datos después de cada request"""
+    if not database.is_closed():
+        database.close()
 
+# Inicializar la base de datos al importar el módulo
+initialize_database()
 
-# --- Funciones de Ayuda ---
-
-def hash_password(password):
-    """Función de ayuda para hashear contraseñas usando SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-
-def get_current_week():
-    """
-    Obtiene la semana actual desde la base de datos.
-    """
-    db = get_db()
-    config = db.execute('SELECT config_value FROM system_config WHERE config_key = ?', ('current_week',)).fetchone()
-    db.close()
-    return int(config['config_value']) if config else 1
-
-
-def set_current_week(week):
-    """
-    Actualiza la semana actual en la base de datos.
-    """
-    db = get_db()
-    db.execute('UPDATE system_config SET config_value = ? WHERE config_key = ?', (str(week), 'current_week'))
-    db.commit()
-    db.close()
-
-def get_system_config():
-    """
-    Obtiene la configuración del sistema.
-    """
-    db = get_db()
-    configs = {}
-    rows = db.execute('SELECT config_key, config_value FROM system_config').fetchall()
-    for row in rows:
-        configs[row['config_key']] = row['config_value']
-    db.close()
-    return configs
-
-
-
-def generate_league_code():
-    """Genera un código único para una liga."""
-    import random
-    import string
-    
-    while True:
-        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-        db = get_db()
-        existing = db.execute('SELECT id FROM leagues WHERE code = ?', (code,)).fetchone()
-        db.close()
-        if not existing:
-            return code
-
-def create_league(name, description, created_by_user_id, max_members=50):
-    """Crea una nueva liga."""
-    try:
-        code = generate_league_code()
-        db = get_db()
-        
-        cursor = db.execute('''
-            INSERT INTO leagues (name, code, description, created_by, max_members)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (name, code, description, created_by_user_id, max_members))
-        
-        league_id = cursor.lastrowid
-        
-        # Agregar al creador como miembro de la liga
-        db.execute('''
-            INSERT INTO league_memberships (user_id, league_id)
-            VALUES (?, ?)
-        ''', (created_by_user_id, league_id))
-        
-        db.commit()
-        db.close()
-        
-        return {'success': True, 'league_id': league_id, 'code': code}
-    
-    except Exception as e:
-        print(f"Error creating league: {e}")
-        return {'success': False, 'error': str(e)}
-
-def join_league(user_id, league_code):
-    """Permite a un usuario unirse a una liga usando un código."""
-    try:
-        db = get_db()
-        
-        # Verificar que la liga existe y está activa
-        league = db.execute('''
-            SELECT id, name, max_members 
-            FROM leagues 
-            WHERE code = ? AND is_active = 1
-        ''', (league_code,)).fetchone()
-        
-        if not league:
-            db.close()
-            return {'success': False, 'error': 'Liga no encontrada o inactiva'}
-        
-        # Verificar que el usuario no esté ya en la liga
-        existing = db.execute('''
-            SELECT id FROM league_memberships 
-            WHERE user_id = ? AND league_id = ? AND is_active = 1
-        ''', (user_id, league['id'])).fetchone()
-        
-        if existing:
-            db.close()
-            return {'success': False, 'error': 'Ya eres miembro de esta liga'}
-        
-        # Verificar límite de miembros
-        current_members = db.execute('''
-            SELECT COUNT(*) as count 
-            FROM league_memberships 
-            WHERE league_id = ? AND is_active = 1
-        ''', (league['id'],)).fetchone()['count']
-        
-        if current_members >= league['max_members']:
-            db.close()
-            return {'success': False, 'error': 'La liga está llena'}
-        
-        # Agregar usuario a la liga
-        db.execute('''
-            INSERT INTO league_memberships (user_id, league_id)
-            VALUES (?, ?)
-        ''', (user_id, league['id']))
-        
-        # Actualizar liga actual del usuario
-        db.execute('''
-            UPDATE users SET current_league_id = ? WHERE id = ?
-        ''', (league['id'], user_id))
-        
-        db.commit()
-        db.close()
-        
-        return {'success': True, 'league_name': league['name']}
-    
-    except Exception as e:
-        print(f"Error joining league: {e}")
-        return {'success': False, 'error': str(e)}
-
-def get_user_leagues(user_id):
-    """Obtiene todas las ligas de un usuario."""
-    db = get_db()
-    leagues = db.execute('''
-        SELECT l.id, l.name, l.code, l.description, lm.joined_at,
-               (SELECT COUNT(*) FROM league_memberships WHERE league_id = l.id AND is_active = 1) as member_count
-        FROM leagues l
-        JOIN league_memberships lm ON l.id = lm.league_id
-        WHERE lm.user_id = ? AND lm.is_active = 1
-        ORDER BY lm.joined_at DESC
-    ''', (user_id,)).fetchall()
-    db.close()
-    return leagues
-
-
-def get_espn_nfl_data(week=None):
-    """
-    Obtiene datos reales de la NFL desde la API de ESPN.
-    Retorna los logos de equipos y los partidos de la semana especificada.
-    """
-    try:
-        # Si no se especifica semana, usar la semana actual del sistema
-        if week is None:
-            week = get_current_week()
-        
-        # Año actual de la temporada NFL (2024)
-        season = 2024
-        
-        # Llamada a la API de ESPN para una semana específica (con SSL deshabilitado)
-        url = f'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week={week}&year={season}'
-        response = requests.get(url, timeout=10, verify=False)
-        response.raise_for_status()
-        data = response.json()
-
-        # Procesar los datos de la API
-        games = []
-        teams = {}
-        for event in data.get('events', []):
-            game_id = event.get('id')
-            competitions = event.get('competitions', [])
-
-            if competitions:
-                competition = competitions[0]
-                competitors = competition.get('competitors', [])
-                if len(competitors) >= 2:
-                    home_team, away_team = None, None
-                    home_logo, away_logo = None, None
-                    for competitor in competitors:
-                        team_info = competitor.get('team', {})
-                        team_name = team_info.get('displayName', '')
-                        team_logo = team_info.get('logo', '')
-                        if competitor.get('homeAway') == 'home':
-                            home_team, home_logo = team_name, team_logo
-                        else:
-                            away_team, away_logo = team_name, team_logo
-                        teams[team_name] = team_logo
-                    start_time = event.get('date', '')
-                    formatted_time = start_time
-                    if start_time:
-                        try:
-                            # Convertir de UTC a CDMX (UTC-6)
-                            dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                            # Restar 6 horas para convertir a CDMX
-                            cdmx_dt = dt - timedelta(hours=6)
-                            formatted_time = cdmx_dt.strftime('%d/%m %H:%M')
-                        except:
-                            formatted_time = 'TBD'
-                    # Obtener información de score y estado del juego
-                    status = competition.get('status', {})
-                    status_type = status.get('type', {}).get('name', '')
-                    home_score = None
-                    away_score = None
-                    
-                    # Si el juego está completado o en progreso, obtener los scores
-                    if status_type in ['STATUS_FINAL', 'STATUS_IN_PROGRESS', 'Final', 'Completed']:
-                        for competitor in competitors:
-                            score = competitor.get('score', 0)
-                            if competitor.get('homeAway') == 'home':
-                                home_score = int(score) if score else 0
-                            else:
-                                away_score = int(score) if score else 0
-                    
-                    if home_team and away_team:
-                        game_data = {
-                            'id': game_id,
-                            'home_team': home_team,
-                            'away_team': away_team,
-                            'start_time': formatted_time,
-                            'home_logo': home_logo,
-                            'away_logo': away_logo,
-                            'status': status_type
-                        }
-                        
-                        # Agregar scores si están disponibles
-                        if home_score is not None and away_score is not None:
-                            game_data['home_score'] = home_score
-                            game_data['away_score'] = away_score
-                            
-                        games.append(game_data)
-        return teams, games
-
-    except Exception as e:
-        print(f"Error al obtener datos de ESPN: {e}")
-        import traceback
-        print(f"Detalles del error: {traceback.format_exc()}")
-        # Fallback a datos mock si la API falla
-        return get_mock_nfl_data()
-
-
-def get_mock_nfl_data():
-    """
-    Datos de fallback en caso de que la API de ESPN no esté disponible.
-    """
-    mock_teams = {
-        'Arizona Cardinals': 'https://a.espncdn.com/i/teamlogos/nfl/500/ari.png',
-        'Atlanta Falcons': 'https://a.espncdn.com/i/teamlogos/nfl/500/atl.png',
-        'Baltimore Ravens': 'https://a.espncdn.com/i/teamlogos/nfl/500/bal.png',
-        'Buffalo Bills': 'https://a.espncdn.com/i/teamlogos/nfl/500/buf.png',
-        'Carolina Panthers': 'https://a.espncdn.com/i/teamlogos/nfl/500/car.png',
-        'Chicago Bears': 'https://a.espncdn.com/i/teamlogos/nfl/500/chi.png',
-        'Cincinnati Bengals': 'https://a.espncdn.com/i/teamlogos/nfl/500/cin.png',
-        'Cleveland Browns': 'https://a.espncdn.com/i/teamlogos/nfl/500/cle.png',
-        'Dallas Cowboys': 'https://a.espncdn.com/i/teamlogos/nfl/500/dal.png',
-        'Denver Broncos': 'https://a.espncdn.com/i/teamlogos/nfl/500/den.png',
-        'Detroit Lions': 'https://a.espncdn.com/i/teamlogos/nfl/500/det.png',
-        'Green Bay Packers': 'https://a.espncdn.com/i/teamlogos/nfl/500/gb.png',
-        'Houston Texans': 'https://a.espncdn.com/i/teamlogos/nfl/500/hou.png',
-        'Indianapolis Colts': 'https://a.espncdn.com/i/teamlogos/nfl/500/ind.png',
-        'Jacksonville Jaguars': 'https://a.espncdn.com/i/teamlogos/nfl/500/jac.png',
-        'Kansas City Chiefs': 'https://a.espncdn.com/i/teamlogos/nfl/500/kc.png',
-        'Las Vegas Raiders': 'https://a.espncdn.com/i/teamlogos/nfl/500/lv.png',
-        'Los Angeles Chargers': 'https://a.espncdn.com/i/teamlogos/nfl/500/lac.png',
-        'Los Angeles Rams': 'https://a.espncdn.com/i/teamlogos/nfl/500/lar.png',
-        'Miami Dolphins': 'https://a.espncdn.com/i/teamlogos/nfl/500/mia.png',
-        'Minnesota Vikings': 'https://a.espncdn.com/i/teamlogos/nfl/500/min.png',
-        'New England Patriots': 'https://a.espncdn.com/i/teamlogos/nfl/500/ne.png',
-        'New Orleans Saints': 'https://a.espncdn.com/i/teamlogos/nfl/500/no.png',
-        'New York Giants': 'https://a.espncdn.com/i/teamlogos/nfl/500/nyg.png',
-        'New York Jets': 'https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png',
-        'Philadelphia Eagles': 'https://a.espncdn.com/i/teamlogos/nfl/500/phi.png',
-        'Pittsburgh Steelers': 'https://a.espncdn.com/i/teamlogos/nfl/500/pit.png',
-        'San Francisco 49ers': 'https://a.espncdn.com/i/teamlogos/nfl/500/sf.png',
-        'Seattle Seahawks': 'https://a.espncdn.com/i/teamlogos/nfl/500/sea.png',
-        'Tampa Bay Buccaneers': 'https://a.espncdn.com/i/teamlogos/nfl/500/tb.png',
-        'Tennessee Titans': 'https://a.espncdn.com/i/teamlogos/nfl/500/ten.png',
-        'Washington Commanders': 'https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png'
-    }
-    mock_games = [
-        {'id': '1', 'home_team': 'Green Bay Packers', 'away_team': 'Chicago Bears', 'start_time': 'Dom 12:00',
-         'home_logo': mock_teams['Green Bay Packers'], 'away_logo': mock_teams['Chicago Bears']},
-        {'id': '2', 'home_team': 'Baltimore Ravens', 'away_team': 'Miami Dolphins', 'start_time': 'Dom 12:00',
-         'home_logo': mock_teams['Baltimore Ravens'], 'away_logo': mock_teams['Miami Dolphins']},
-        {'id': '3', 'home_team': 'Cincinnati Bengals', 'away_team': 'Cleveland Browns', 'start_time': 'Dom 15:05',
-         'home_logo': mock_teams['Cincinnati Bengals'], 'away_logo': mock_teams['Cleveland Browns']},
-        {'id': '4', 'home_team': 'Las Vegas Raiders', 'away_team': 'Denver Broncos', 'start_time': 'Dom 15:25',
-         'home_logo': mock_teams['Las Vegas Raiders'], 'away_logo': mock_teams['Denver Broncos']},
-        {'id': '5', 'home_team': 'Kansas City Chiefs', 'away_team': 'Buffalo Bills', 'start_time': 'Lun 20:15',
-         'home_logo': mock_teams['Kansas City Chiefs'], 'away_logo': mock_teams['Buffalo Bills']}
-    ]
-    return mock_teams, mock_games
-
-
-def check_picks_deadline():
-    """
-    Verifica si aún se pueden enviar picks.
-    Retorna True si está dentro del tiempo límite, False si ya expiró.
-    """
-    config = get_system_config()
-    picks_locked = config.get('picks_locked', '0') == '1'
-    return not picks_locked
-
+# =============================================================================
+# FUNCIONES HELPER MIGRADAS A shared_utils.py
+# =============================================================================
 
 def get_user_standings():
     """
-    Calcula la clasificación de la semana actual solamente.
-    Retorna una lista ordenada por puntuación descendente.
+    Obtiene el ranking general de usuarios (para admin) usando Peewee.
     """
-    db = get_db()
-    
-    # Obtener semana actual
-    config = get_system_config()
-    current_week = config['current_week'] if config else 1
-    
-    users = db.execute('SELECT id, username FROM users WHERE is_admin = 0').fetchall()
-    
-    standings = []
-    for user in users:
-        # Contar aciertos de la semana actual solamente
-        correct_picks = db.execute('''
-            SELECT COUNT(*) as count FROM picks p
-            JOIN game_results gr ON p.game_id = gr.game_id AND p.week = gr.week
-            WHERE p.user_id = ? AND p.week = ? AND p.selection = gr.winner
-        ''', (user['id'], current_week)).fetchone()
+    try:
+        from peewee import fn
         
-        # Contar total de picks de la semana actual
-        total_picks = db.execute('''
-            SELECT COUNT(*) as count FROM picks p
-            WHERE p.user_id = ? AND p.week = ?
-        ''', (user['id'], current_week)).fetchone()
+        # Obtener todos los usuarios no-admin
+        users = User.select().where(User.is_admin == False)
+        standings_data = []
         
-        score = correct_picks['count'] if correct_picks else 0
-        total = total_picks['count'] if total_picks else 0
-        percentage = (score / total * 100) if total > 0 else 0
-        
-        # Solo incluir usuarios que hicieron picks esta semana
-        if total > 0:
-            standings.append({
-                'username': user['username'],
-                'score': score,
-                'user_id': user['id'],
+        for user in users:
+            # Contar picks totales y correctos
+            total_picks = Pick.select().where(Pick.user == user).count()
+            
+            if total_picks == 0:
+                continue
+                
+            # Contar picks correctos manejando tanto strings como diccionarios
+            correct_picks = 0
+            user_picks = Pick.select(Pick, GameResult).join(
+                GameResult, 
+                on=((Pick.game_id == GameResult.game_id) & (Pick.week == GameResult.week)),
+                join_type='INNER'
+            ).where(Pick.user == user)
+            
+            for pick in user_picks:
+                # Manejar pick.selection como string o diccionario
+                if hasattr(pick, 'gameresult'):
+                    try:
+                        if isinstance(pick.selection, dict):
+                            pick_value = pick.selection.get('abbreviation', pick.selection.get('name', ''))
+                        else:
+                            pick_value = str(pick.selection)
+                        
+                        if pick_value == pick.gameresult.winner:
+                            correct_picks += 1
+                    except Exception as pick_error:
+                        print(f"Error processing pick for user {user.username}: {pick_error}")
+                        continue
+            
+            percentage = (correct_picks / total_picks * 100) if total_picks > 0 else 0
+            
+            standings_data.append({
+                'username': user.username,
+                'nombre': user.first_name or '',
+                'apellido': user.last_name or '',
+                'total_score': correct_picks,
+                'correct_picks': correct_picks,
+                'total_picks': total_picks,
                 'percentage': percentage,
-                'total_picks': total,
-                'week': current_week
+                'score': correct_picks,  # Para compatibilidad con template
+                'first_name': user.first_name,
+                'last_name': user.last_name
             })
-    
-    standings.sort(key=lambda x: x['score'], reverse=True)
-    db.close()
-    return standings
+        
+        # Ordenar por score descendente
+        standings_data.sort(key=lambda x: x['total_score'], reverse=True)
+        return standings_data
+        
+    except Exception as e:
+        import traceback
+        print(f"Error getting standings: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return []
 
-
-# --- Rutas de la Aplicación ---
+# =============================================================================
+# RUTAS DE LA APLICACIÓN (MIGRANDO GRADUALMENTE)
+# =============================================================================
 
 @app.route('/')
 def home():
-    """
-    Ruta principal del dashboard.
-    Muestra la página de inicio o redirige al login si no hay sesión activa.
-    """
+    """Página principal - mantiene la misma lógica"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    # Si es admin, redirigir al panel de administración
-    if session.get('is_admin'):
-        return redirect(url_for('admin_panel'))
-    
-    db = get_db()
-    current_week = get_current_week()
-
-    # Obtener estadísticas para el dashboard (solo usuarios no admin)
-    users_count = db.execute('SELECT COUNT(*) as count FROM users WHERE is_admin = 0').fetchone()['count']
-    
-    # Verificar si el usuario actual ha enviado picks
-    user_picks = db.execute('''
-        SELECT * FROM picks WHERE user_id = ? AND week = ?
-    ''', (session['user_id'], current_week)).fetchall()
-    user_has_submitted_picks = len(user_picks) > 0
-    
-    # Obtener clasificación actual (top 10)
-    standings = get_user_standings()[:10]
-    
-    # Obtener historial de ganadores (últimas 5 semanas)
-    winners_history = db.execute('''
-        SELECT * FROM winners_history ORDER BY week DESC LIMIT 5
-    ''').fetchall()
-    
-    db.close()
-    
-    return render_template('index.html',
-                           current_week=current_week,
-                           users_count=users_count,
-                           user_has_submitted_picks=user_has_submitted_picks,
-                           standings=standings,
-                           winners_history=winners_history,
-                           last_updated=datetime.now().strftime('%d/%m/%Y %H:%M'))
-
+    try:
+        # Obtener usuario usando Peewee
+        user = User.get_by_id(session['user_id'])
+        
+        # Si es admin, redirigir directamente al panel de administración
+        if user.is_admin:
+            return redirect(url_for('admin.dashboard'))
+        
+        # Obtener ligas del usuario
+        user_leagues = get_user_leagues(session['user_id'])
+        
+        if not user_leagues:
+            # Usuario sin ligas - redirigir a página para unirse
+            return redirect(url_for('join_league_route'))
+        
+        # Seleccionar liga actual
+        current_league_id = session.get('current_league_id')
+        
+        if current_league_id:
+            try:
+                current_league = League.get_by_id(current_league_id)
+                if current_league not in user_leagues and not user.is_admin:
+                    # Liga no válida para el usuario
+                    current_league = user_leagues[0] if user_leagues else None
+                    session['current_league_id'] = current_league.id if current_league else None
+            except League.DoesNotExist:
+                current_league = user_leagues[0] if user_leagues else None
+                session['current_league_id'] = current_league.id if current_league else None
+        else:
+            current_league = user_leagues[0] if user_leagues else None
+            session['current_league_id'] = current_league.id if current_league else None
+        
+        # Obtener datos de juegos
+        current_week = get_current_week()
+        games = get_espn_nfl_data(current_week)
+        
+        # Obtener picks del usuario para la semana actual
+        user_picks = {}
+        picks_stats = {'total': 0, 'correct': 0, 'incorrect': 0, 'pending': 0}
+        
+        if current_league:
+            picks = Pick.select().where(
+                (Pick.user == user) & 
+                (Pick.league_id == current_league.id) & 
+                (Pick.week == current_week)
+            )
+            user_picks = {pick.game_id: pick.selection for pick in picks}
+            
+            # Calcular estadísticas de picks
+            results = GameResult.select().where(GameResult.week == current_week)
+            results_dict = {result.game_id: result for result in results}
+            
+            for pick in picks:
+                picks_stats['total'] += 1
+                
+                if pick.game_id in results_dict:
+                    result = results_dict[pick.game_id]
+                    
+                    # Procesar pick.selection para manejar diferentes formatos
+                    picked_team_data = None
+                    if isinstance(pick.selection, dict):
+                        picked_team_data = pick.selection
+                    elif isinstance(pick.selection, str):
+                        try:
+                            import json
+                            if pick.selection.startswith('{') and pick.selection.endswith('}'):
+                                json_string = pick.selection.replace("'", '"')
+                                picked_team_data = json.loads(json_string)
+                            else:
+                                picked_team_data = {'name': pick.selection, 'abbreviation': pick.selection}
+                        except (json.JSONDecodeError, ValueError):
+                            picked_team_data = {'name': pick.selection, 'abbreviation': pick.selection}
+                    else:
+                        selection_str = str(pick.selection)
+                        picked_team_data = {'name': selection_str, 'abbreviation': selection_str}
+                    
+                    picked_team_abbr = picked_team_data.get('abbreviation', '')
+                    picked_team_name = picked_team_data.get('name', '')
+                    
+                    if picked_team_abbr == result.winner or picked_team_name == result.winner:
+                        picks_stats['correct'] += 1
+                    else:
+                        picks_stats['incorrect'] += 1
+                else:
+                    picks_stats['pending'] += 1
+        
+        # Obtener standings de la liga actual
+        standings = []
+        if current_league:
+            standings = get_user_standings_by_league(current_league.id)
+        
+        # Obtener historial de ganadores (últimas 5 semanas)
+        winners_history = []
+        try:
+            from quinielasapp.models.models import WinnersHistory
+            if current_league:
+                recent_winners = WinnersHistory.select().where(
+                    WinnersHistory.league_id == current_league.id
+                ).order_by(WinnersHistory.week.desc()).limit(5)
+                
+                winners_history = [{
+                    'username': winner.winner_username,
+                    'week': winner.week,
+                    'score': winner.score,
+                    'is_tie': winner.is_tie
+                } for winner in recent_winners]
+        except Exception as e:
+            print(f"Error loading winners history: {e}")
+            winners_history = []
+        
+        # Calcular número de participantes en la liga actual
+        users_count = 0
+        if current_league:
+            from quinielasapp.models.models import LeagueMembership
+            users_count = User.select().join(LeagueMembership).where(
+                (LeagueMembership.league_id == current_league.id) & 
+                (LeagueMembership.is_active == True)
+            ).count()
+        
+        # Verificar si el usuario ya envió sus picks para la semana actual
+        user_has_submitted_picks = False
+        if current_league:
+            total_games = len(games)
+            user_picks_count = Pick.select().where(
+                (Pick.user == user) & 
+                (Pick.league_id == current_league.id) & 
+                (Pick.week == current_week)
+            ).count()
+            user_has_submitted_picks = (user_picks_count >= total_games)
+        
+        # Verificar si los picks están bloqueados
+        picks_locked = check_picks_deadline()
+        
+        return render_template('index.html',
+                             games=games,
+                             user_picks=user_picks,
+                             current_week=current_week,
+                             standings=standings[:10],  # Top 10
+                             user_leagues=user_leagues,
+                             current_league=current_league,
+                             is_admin=user.is_admin,
+                             picks_locked=picks_locked,
+                             picks_stats=picks_stats,
+                             winners_history=winners_history,
+                             users_count=users_count,
+                             user_has_submitted_picks=user_has_submitted_picks)
+                             
+    except User.DoesNotExist:
+        # Usuario no existe, limpiar sesión
+        session.clear()
+        flash('Usuario no encontrado', 'error')
+        return redirect(url_for('login'))
+    except Exception as e:
+        print(f"Error in home route: {e}")
+        flash('Error interno del servidor', 'error')
+        return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Maneja el login de usuarios."""
+    """Login de usuarios usando Peewee"""
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        hashed_password = hash_password(password)
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
         
-        db = get_db()
-        user = db.execute(
-            'SELECT * FROM users WHERE username = ? AND password = ?',
-            (username, hashed_password)
-        ).fetchone()
-        db.close()
+        if not username or not password:
+            flash('Todos los campos son requeridos', 'error')
+            return render_template('login.html')
         
-        if user:
-            session['user_id'] = user['id']
-            session['username'] = user['username']
-            session['is_admin'] = user['is_admin']
-            flash('Login exitoso', 'success')
-            return redirect(url_for('home'))
-        else:
-            flash('Usuario o contraseña incorrectos', 'error')
+        try:
+            # Buscar usuario con Peewee
+            user = User.get(User.username == username)
+            
+            # Verificar contraseña
+            if user.check_password(password):
+                # Login exitoso
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session['is_admin'] = user.is_admin
+                
+                # Si es admin, no necesita liga
+                if not user.is_admin:
+                    # Obtener ligas del usuario para establecer la actual
+                    user_leagues = get_user_leagues(user.id)
+                    if user_leagues:
+                        session['current_league_id'] = user_leagues[0].id
+                
+                flash(f'Bienvenido, {user.username}!', 'success')
+                return redirect(url_for('home'))
+            else:
+                flash('Credenciales incorrectas', 'error')
+                
+        except User.DoesNotExist:
+            flash('Usuario no encontrado', 'error')
+        except Exception as e:
+            print(f"Error in login: {e}")
+            flash('Error interno del servidor', 'error')
     
     return render_template('login.html')
 
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """Maneja el registro de nuevos usuarios."""
+    """Registro de nuevos usuarios usando Peewee"""
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        confirm_password = request.form['confirm_password']
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        league_code = request.form.get('league_code', '').strip().upper()
         
-        # Validación básica
+        # Validaciones básicas
+        if not username:
+            flash('El nombre de usuario es requerido', 'error')
+            return render_template('register.html')
+        
         if len(username) < 3:
             flash('El nombre de usuario debe tener al menos 3 caracteres', 'error')
             return render_template('register.html')
-            
+        
+        if not password:
+            flash('La contraseña es requerida', 'error')
+            return render_template('register.html')
+        
         if len(password) < 6:
             flash('La contraseña debe tener al menos 6 caracteres', 'error')
             return render_template('register.html')
-            
+        
         if password != confirm_password:
             flash('Las contraseñas no coinciden', 'error')
             return render_template('register.html')
         
-        hashed_password = hash_password(password)
+        if not league_code:
+            flash('El código de liga es requerido', 'error')
+            return render_template('register.html')
         
-        db = get_db()
         try:
             # Verificar si el usuario ya existe
-            existing_user = db.execute(
-                'SELECT id FROM users WHERE username = ?', (username,)
-            ).fetchone()
-            
-            if existing_user:
+            if User.select().where(User.username == username).exists():
                 flash('El nombre de usuario ya existe', 'error')
                 return render_template('register.html')
-                
-            # Insertar el nuevo usuario
-            db.execute(
-                'INSERT INTO users (username, password) VALUES (?, ?)',
-                (username, hashed_password)
+            
+            # Verificar que la liga existe
+            try:
+                league = League.get((League.code == league_code) & (League.is_active == True))
+            except League.DoesNotExist:
+                flash('Código de liga inválido o liga inactiva', 'error')
+                return render_template('register.html')
+            
+            # Crear el usuario
+            user = User(
+                username=username,
+                first_name=first_name if first_name else None,
+                last_name=last_name if last_name else None,
+                is_admin=False
             )
-            db.commit()
+            user.set_password(password)
+            user.save()
+            
+            # Agregar a la liga
+            LeagueMembership.create(
+                user=user,
+                league=league,
+                joined_at=datetime.now(),
+                is_active=True
+            )
+            
             flash('Registro exitoso. Ahora puedes iniciar sesión.', 'success')
             return redirect(url_for('login'))
-        
-        except sqlite3.Error:
-            flash('Error al crear la cuenta. Inténtalo de nuevo.', 'error')
-        finally:
-            db.close()
             
+        except Exception as e:
+            print(f"Error during registration: {e}")
+            flash('Error interno del servidor', 'error')
+    
     return render_template('register.html')
-
 
 @app.route('/logout')
 def logout():
-    """Cierra la sesión del usuario."""
+    """Logout del usuario"""
     session.clear()
-    flash('Has cerrado sesión exitosamente', 'success')
+    flash('Sesión cerrada correctamente', 'success')
     return redirect(url_for('login'))
 
+@app.route('/switch_league', methods=['POST'])
+def switch_league():
+    """Cambiar liga actual del usuario"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'No estás logueado'}), 401
+    
+    try:
+        data = request.get_json()
+        league_id = data.get('league_id')
+        
+        if not league_id:
+            return jsonify({'success': False, 'message': 'Liga no especificada'}), 400
+        
+        user = User.get_by_id(session['user_id'])
+        
+        # Verificar si el usuario pertenece a esta liga o es admin
+        if not user.is_admin:
+            membership = LeagueMembership.select().where(
+                (LeagueMembership.user == user) & 
+                (LeagueMembership.league_id == league_id) & 
+                (LeagueMembership.is_active == True)
+            ).first()
+            
+            if not membership:
+                return jsonify({'success': False, 'message': 'No perteneces a esta liga'}), 403
+        
+        # Cambiar liga actual en la sesión
+        session['current_league_id'] = int(league_id)
+        
+        return jsonify({'success': True, 'message': 'Liga cambiada exitosamente'})
+        
+    except Exception as e:
+        print(f"Error switching league: {e}")
+        return jsonify({'success': False, 'message': 'Error interno del servidor'}), 500
 
 @app.route('/picks', methods=['GET', 'POST'])
 def picks_form():
-    """Formulario para que los usuarios hagan sus picks."""
+    """Formulario para hacer picks usando Peewee"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    current_week = get_current_week()
-    
-    # Verificar deadline
-    if not check_picks_deadline():
-        flash('El tiempo para enviar picks ha expirado', 'error')
+    try:
+        user = User.get_by_id(session['user_id'])
+        current_week = get_current_week()
+        
+        # Obtener liga actual
+        current_league_id = session.get('current_league_id')
+        if not current_league_id:
+            user_leagues = get_user_leagues(user.id)
+            if user_leagues:
+                current_league_id = user_leagues[0].id
+                session['current_league_id'] = current_league_id
+            else:
+                flash('Debes unirte a una liga primero', 'error')
+                return redirect(url_for('home'))
+        
+        current_league = League.get_by_id(current_league_id)
+        
+        if request.method == 'POST':
+            # Verificar si los picks están bloqueados
+            if check_picks_deadline():
+                flash('Los picks están bloqueados para esta semana', 'error')
+                return redirect(url_for('picks_form'))
+            
+            # Procesar picks
+            games_data = request.form
+            picks_saved = 0
+            
+            for key, selection in games_data.items():
+                if key.startswith('game_') and selection:
+                    game_id = key.replace('game_', '')
+                    
+                    # Usar get_or_create para actualizar picks existentes
+                    pick, created = Pick.get_or_create(
+                        user=user,
+                        league=current_league,
+                        week=current_week,
+                        game_id=game_id,
+                        defaults={'selection': selection}
+                    )
+                    
+                    if not created:
+                        # Actualizar pick existente
+                        pick.selection = selection
+                        pick.save()
+                    
+                    picks_saved += 1
+            
+            flash(f'Se guardaron {picks_saved} picks para la semana {current_week}', 'success')
+            return redirect(url_for('home'))
+        
+        # GET - Mostrar formulario
+        games = get_espn_nfl_data(current_week)
+        
+        # Obtener picks actuales del usuario
+        current_picks = Pick.select().where(
+            (Pick.user == user) &
+            (Pick.league_id == current_league.id) &
+            (Pick.week == current_week)
+        )
+        user_picks = {pick.game_id: pick.selection for pick in current_picks}
+        
+        # Verificar si los picks están bloqueados
+        picks_locked = check_picks_deadline()
+        
+        return render_template('picks_form.html',
+                             games=games,
+                             user_picks=user_picks,
+                             current_week=current_week,
+                             current_league=current_league,
+                             picks_locked=picks_locked)
+                             
+    except Exception as e:
+        print(f"Error in picks_form: {e}")
+        flash('Error interno del servidor', 'error')
         return redirect(url_for('home'))
-    
-    if request.method == 'POST':
-        db = get_db()
-        
-        # Eliminar picks anteriores del usuario para esta semana
-        db.execute('DELETE FROM picks WHERE user_id = ? AND week = ?',
-                   (session['user_id'], current_week))
-        
-        # Insertar nuevos picks
-        for key, value in request.form.items():
-            if key.startswith('game_'):
-                game_id = key.replace('game_', '')
-                db.execute(
-                    'INSERT INTO picks (user_id, week, game_id, selection) VALUES (?, ?, ?, ?)',
-                    (session['user_id'], current_week, game_id, value)
-                )
-        
-        db.commit()
-        db.close()
-        
-        flash('Picks enviados exitosamente', 'success')
-        return redirect(url_for('home'))
-        
-    # GET request - mostrar el formulario
-    teams, games = get_espn_nfl_data()
-    
-    # Obtener picks existentes del usuario
-    db = get_db()
-    existing_picks = db.execute('''
-        SELECT game_id, selection FROM picks
-        WHERE user_id = ? AND week = ?
-    ''', (session['user_id'], current_week)).fetchall()
-    db.close()
-    
-    # Convertir a diccionario para fácil acceso
-    user_picks = {str(pick['game_id']): pick['selection'] for pick in existing_picks}
-    
-    return render_template('picks_form.html',
-                           games=games,
-                           teams=teams,
-                           current_week=current_week,
-                           user_picks=user_picks)
 
-
-# --- Rutas administrativas ---
-
-@app.route('/admin')
-def admin_panel():
-    """Panel de administración (solo para admins)."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        flash('Acceso denegado', 'error')
-        return redirect(url_for('home'))
-    
-    db = get_db()
-    current_week = get_current_week()
-    config = get_system_config()
-
-    # Obtener estadísticas para el panel admin
-    total_users = db.execute('SELECT COUNT(*) as count FROM users WHERE is_admin = 0').fetchone()['count']
-    
-    picks_submitted = db.execute('''
-        SELECT COUNT(DISTINCT p.user_id) as count 
-        FROM picks p 
-        JOIN users u ON p.user_id = u.id 
-        WHERE p.week = ? AND u.is_admin = 0
-    ''', (current_week,)).fetchone()['count']
-    
-    processed_results = db.execute('SELECT COUNT(*) as count FROM game_results WHERE week = ?',
-                                   (current_week,)).fetchone()['count']
-    
-    # Obtener lista de usuarios con información adicional
-    users = db.execute('''
-        SELECT u.id, u.username, u.is_admin,
-               CASE WHEN p.user_id IS NOT NULL THEN 1 ELSE 0 END as has_picks,
-               COALESCE(SUM(CASE WHEN gr.winner = p.selection THEN 1 ELSE 0 END), 0) as total_score
-        FROM users u
-        LEFT JOIN picks p ON u.id = p.user_id AND p.week = ?
-        LEFT JOIN game_results gr ON p.game_id = gr.game_id AND p.week = gr.week
-        WHERE u.is_admin = 0
-        GROUP BY u.id, u.username, u.is_admin, (CASE WHEN p.user_id IS NOT NULL THEN 1 ELSE 0 END)
-    ''', (current_week,)).fetchall()
-    
-    db.close()
-    
-    return render_template('admin.html',
-                           current_week=current_week,
-                           total_users=total_users,
-                           picks_submitted=picks_submitted,
-                           processed_results=processed_results,
-                           users=users,
-                           config=config,
-                           last_updated=datetime.now().strftime('%d/%m/%Y %H:%M'))
 @app.route('/standings')
 def standings():
-    """Retorna la clasificación actual (para HTMX)."""
-    standings = get_user_standings()
-    return render_template('standings_partial.html', standings=standings)
-
+    """Página de standings usando Peewee"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        user = User.get_by_id(session['user_id'])
+        current_league_id = session.get('current_league_id')
+        
+        if not current_league_id and not user.is_admin:
+            return render_template('standings_partial.html', standings=[])
+        
+        if user.is_admin:
+            # Admin ve standings generales
+            standings = get_user_standings()
+        else:
+            # Usuario ve standings de su liga
+            standings = get_user_standings_by_league(current_league_id)
+        
+        return render_template('standings_partial.html', standings=standings)
+        
+    except Exception as e:
+        print(f"Error in standings: {e}")
+        return render_template('standings_partial.html', standings=[])
 
 @app.route('/picks_grid')
 def picks_grid():
-    """Vista de cuadrícula de picks por partido."""
-    config = get_system_config()
-    current_week = config['current_week'] if config else 1
+    """Grid de picks de todos los usuarios"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     
-    db = get_db()
-    
-    # Obtener juegos de la semana actual con información de ESPN
-    teams, games_data = get_espn_nfl_data(current_week)
-    
-    # Obtener todos los usuarios (no admins)
-    users = db.execute('SELECT id, username FROM users WHERE is_admin = 0 ORDER BY username').fetchall()
-    
-    # Obtener todos los picks para esta semana
-    picks = db.execute('''
-        SELECT p.user_id, p.game_id, p.selection, u.username,
-               gr.winner, gr.home_team, gr.away_team
-        FROM picks p
-        JOIN users u ON p.user_id = u.id
-        LEFT JOIN game_results gr ON p.game_id = gr.game_id AND p.week = gr.week
-        WHERE p.week = ? AND u.is_admin = 0
-        ORDER BY u.username, p.game_id
-    ''', (current_week,)).fetchall()
-    
-    # Organizar picks por usuario y juego
-    picks_matrix = {}
-    for pick in picks:
-        user_id = pick['user_id']
-        game_id = pick['game_id']
-        if user_id not in picks_matrix:
-            picks_matrix[user_id] = {}
-        picks_matrix[user_id][game_id] = {
-            'selection': pick['selection'],
-            'winner': pick['winner'],
-            'is_correct': pick['winner'] == pick['selection'] if pick['winner'] else None
-        }
-    
-    db.close()
-    
-    return render_template('picks_grid.html', 
-                         games=games_data, 
-                         users=users, 
-                         picks_matrix=picks_matrix,
-                         current_week=current_week)
-
+    try:
+        user = User.get_by_id(session['user_id'])
+        current_week = get_current_week()
+        current_league_id = session.get('current_league_id')
+        
+        if not current_league_id and not user.is_admin:
+            return render_template('picks_grid.html', users=[], games=[], picks_matrix={})
+        
+        # Obtener juegos de la semana
+        games = get_espn_nfl_data(current_week)
+        
+        # Obtener usuarios y picks
+        if user.is_admin and not current_league_id:
+            # Admin sin liga específica - ver todos
+            users = User.select().where(User.is_admin == False)
+            picks = Pick.select().where(Pick.week == current_week)
+        else:
+            # Liga específica
+            league = League.get_by_id(current_league_id)
+            # Usar la consulta directamente en lugar de la propiedad
+            users = User.select().join(LeagueMembership).where(
+                (LeagueMembership.league_id == league.id) & 
+                (LeagueMembership.is_active == True)
+            )
+            picks = Pick.select().where(
+                (Pick.week == current_week) & 
+                (Pick.league_id == league.id)
+            )
+        
+        # Crear matriz de picks
+        picks_matrix = {}
+        for pick in picks:
+            user_id = pick.user.id
+            game_id = pick.game_id
+            if user_id not in picks_matrix:
+                picks_matrix[user_id] = {}
+            
+            # Procesar pick.selection para manejar diferentes formatos
+            picked_team_data = None
+            
+            if isinstance(pick.selection, dict):
+                picked_team_data = pick.selection
+            elif isinstance(pick.selection, str):
+                # Intentar parsear como JSON si parece un diccionario
+                try:
+                    import json
+                    if pick.selection.startswith('{') and pick.selection.endswith('}'):
+                        # Convertir comillas simples a dobles para JSON válido
+                        json_string = pick.selection.replace("'", '"')
+                        picked_team_data = json.loads(json_string)
+                    else:
+                        # Es solo un string simple (abreviatura o nombre)
+                        picked_team_data = {'name': pick.selection, 'abbreviation': pick.selection}
+                except (json.JSONDecodeError, ValueError):
+                    # No es JSON válido, tratar como string simple
+                    picked_team_data = {'name': pick.selection, 'abbreviation': pick.selection}
+            else:
+                # Otros tipos, convertir a string
+                selection_str = str(pick.selection)
+                picked_team_data = {'name': selection_str, 'abbreviation': selection_str}
+            
+            selection_name = picked_team_data.get('name', '')
+            selection_abbr = picked_team_data.get('abbreviation', '')
+            
+            picks_matrix[user_id][game_id] = {
+                'selection': {
+                    'name': selection_name,
+                    'abbreviation': selection_abbr
+                },
+                'is_correct': None  # Se calculará si hay resultados
+            }
+        
+        # Obtener resultados de juegos para calcular is_correct
+        results = GameResult.select().where(GameResult.week == current_week)
+        results_dict = {result.game_id: result for result in results}
+        
+        # Calcular is_correct para cada pick
+        for user_id in picks_matrix:
+            for game_id in picks_matrix[user_id]:
+                if game_id in results_dict:
+                    result = results_dict[game_id]
+                    pick_data = picks_matrix[user_id][game_id]
+                    picked_team_abbr = pick_data['selection']['abbreviation']
+                    picked_team_name = pick_data['selection']['name']
+                    
+                    # Comparar con el ganador del resultado
+                    if picked_team_abbr == result.winner or picked_team_name == result.winner:
+                        picks_matrix[user_id][game_id]['is_correct'] = True
+                    else:
+                        picks_matrix[user_id][game_id]['is_correct'] = False
+        
+        return render_template('picks_grid.html', 
+                             users=users, 
+                             games=games, 
+                             picks_matrix=picks_matrix,
+                             current_week=current_week)
+                             
+    except Exception as e:
+        print(f"Error in picks_grid: {e}")
+        return render_template('picks_grid.html', users=[], games=[], picks_matrix={})
 
 @app.route('/picks_grid_partial')
 def picks_grid_partial():
-    """Cuadrícula de picks como partial para el dashboard."""
-    config = get_system_config()
-    current_week = config['current_week'] if config else 1
+    """Versión parcial del grid para HTMX"""
+    if 'user_id' not in session:
+        return render_template('picks_grid_partial.html', users=[], games=[], picks_matrix={})
     
-    db = get_db()
-    
-    # Obtener juegos de la semana actual con información de ESPN
-    teams, games_data = get_espn_nfl_data(current_week)
-    
-    # Obtener todos los usuarios (no admins)
-    users = db.execute('SELECT id, username FROM users WHERE is_admin = 0 ORDER BY username').fetchall()
-    
-    # Obtener todos los picks para esta semana
-    picks = db.execute('''
-        SELECT p.user_id, p.game_id, p.selection, u.username,
-               gr.winner, gr.home_team, gr.away_team
-        FROM picks p
-        JOIN users u ON p.user_id = u.id
-        LEFT JOIN game_results gr ON p.game_id = gr.game_id AND p.week = gr.week
-        WHERE p.week = ? AND u.is_admin = 0
-        ORDER BY u.username, p.game_id
-    ''', (current_week,)).fetchall()
-    
-    # Organizar picks por usuario y juego
-    picks_matrix = {}
-    for pick in picks:
-        user_id = pick['user_id']
-        game_id = pick['game_id']
-        if user_id not in picks_matrix:
-            picks_matrix[user_id] = {}
-        picks_matrix[user_id][game_id] = {
-            'selection': pick['selection'],
-            'winner': pick['winner'],
-            'is_correct': pick['winner'] == pick['selection'] if pick['winner'] else None
-        }
-    
-    db.close()
-    
-    return render_template('picks_grid_partial.html', 
-                         games=games_data, 
-                         users=users, 
-                         picks_matrix=picks_matrix,
-                         current_week=current_week)
-
+    try:
+        user = User.get_by_id(session['user_id'])
+        current_week = get_current_week()
+        current_league_id = session.get('current_league_id')
+        
+        if not current_league_id and not user.is_admin:
+            return render_template('picks_grid_partial.html', users=[], games=[], picks_matrix={})
+        
+        games = get_espn_nfl_data(current_week)
+        
+        if user.is_admin and not current_league_id:
+            users = User.select().where(User.is_admin == False)
+            picks = Pick.select().where(Pick.week == current_week)
+        else:
+            league = League.get_by_id(current_league_id)
+            # Usar la consulta directamente en lugar de la propiedad
+            users = User.select().join(LeagueMembership).where(
+                (LeagueMembership.league_id == league.id) & 
+                (LeagueMembership.is_active == True)
+            )
+        picks = Pick.select().where(
+            (Pick.week == current_week) & 
+            (Pick.league_id == league.id)
+        )
+        
+        picks_matrix = {}
+        for pick in picks:
+            user_id = pick.user.id
+            game_id = pick.game_id
+            if user_id not in picks_matrix:
+                picks_matrix[user_id] = {}
+            
+            # Procesar pick.selection para manejar diferentes formatos
+            picked_team_data = None
+            
+            if isinstance(pick.selection, dict):
+                picked_team_data = pick.selection
+            elif isinstance(pick.selection, str):
+                # Intentar parsear como JSON si parece un diccionario
+                try:
+                    import json
+                    if pick.selection.startswith('{') and pick.selection.endswith('}'):
+                        # Convertir comillas simples a dobles para JSON válido
+                        json_string = pick.selection.replace("'", '"')
+                        picked_team_data = json.loads(json_string)
+                    else:
+                        # Es solo un string simple (abreviatura o nombre)
+                        picked_team_data = {'name': pick.selection, 'abbreviation': pick.selection}
+                except (json.JSONDecodeError, ValueError):
+                    # No es JSON válido, tratar como string simple
+                    picked_team_data = {'name': pick.selection, 'abbreviation': pick.selection}
+            else:
+                # Otros tipos, convertir a string
+                selection_str = str(pick.selection)
+                picked_team_data = {'name': selection_str, 'abbreviation': selection_str}
+            
+            selection_name = picked_team_data.get('name', '')
+            selection_abbr = picked_team_data.get('abbreviation', '')
+            
+            picks_matrix[user_id][game_id] = {
+                'selection': {
+                    'name': selection_name,
+                    'abbreviation': selection_abbr
+                },
+                'is_correct': None  # Se calculará si hay resultados
+            }
+        
+        # Obtener resultados de juegos para calcular is_correct
+        results = GameResult.select().where(GameResult.week == current_week)
+        results_dict = {result.game_id: result for result in results}
+        
+        # Calcular is_correct para cada pick
+        for user_id in picks_matrix:
+            for game_id in picks_matrix[user_id]:
+                if game_id in results_dict:
+                    result = results_dict[game_id]
+                    pick_data = picks_matrix[user_id][game_id]
+                    picked_team_abbr = pick_data['selection']['abbreviation']
+                    picked_team_name = pick_data['selection']['name']
+                    
+                    # Comparar con el ganador del resultado
+                    if picked_team_abbr == result.winner or picked_team_name == result.winner:
+                        picks_matrix[user_id][game_id]['is_correct'] = True
+                    else:
+                        picks_matrix[user_id][game_id]['is_correct'] = False
+        
+        return render_template('picks_grid_partial.html', 
+                             users=users, 
+                             games=games, 
+                             picks_matrix=picks_matrix)
+                             
+    except Exception as e:
+        print(f"Error in picks_grid_partial: {e}")
+        return render_template('picks_grid_partial.html', users=[], games=[], picks_matrix={})
 
 @app.route('/user_picks_status')
 def user_picks_status():
-    """Estado de picks del usuario actual (para HTMX)."""
+    """Estado de picks del usuario"""
     if 'user_id' not in session:
-        return ''
-
-    db = get_db()
-    current_week = get_current_week()
-    
-    # Obtener picks del usuario para la semana actual
-    user_picks = db.execute('''
-        SELECT p.*, gr.winner,
-               CASE WHEN p.selection = gr.winner THEN 'correct'
-                    WHEN gr.winner IS NOT NULL THEN 'incorrect'
-                    ELSE 'pending' END as result
-        FROM picks p
-        LEFT JOIN game_results gr ON p.game_id = gr.game_id AND p.week = gr.week
-        WHERE p.user_id = ? AND p.week = ?
-    ''', (session['user_id'], current_week)).fetchall()
-    
-    # Calcular puntuación de la semana
-    user_score = sum(1 for pick in user_picks if pick['result'] == 'correct')
-    
-    # Obtener puntuación total
-    total_score = db.execute('''
-        SELECT COUNT(*) as count FROM picks p
-        JOIN game_results gr ON p.game_id = gr.game_id AND p.week = gr.week
-        WHERE p.user_id = ? AND p.selection = gr.winner
-    ''', (session['user_id'],)).fetchone()['count']
-    
-    db.close()
-    
-    # Obtener datos de juegos para mostrar nombres de equipos
-    teams, games = get_espn_nfl_data()
-    games_dict = {str(game['id']): game for game in games}
-
-    # Enriquecer picks con información de equipos y logos
-    enriched_picks = []
-    for pick in user_picks:
-        game = games_dict.get(str(pick['game_id']), {})
-        enriched_picks.append({
-            **dict(pick),
-            'home_team': game.get('home_team', 'Unknown'),
-            'away_team': game.get('away_team', 'Unknown'),
-            'home_logo': game.get('home_logo', ''),
-            'away_logo': game.get('away_logo', ''),
-            'picked_team': pick['selection']
-        })
-    
-    return render_template('user_picks_status.html',
-                           user_picks=enriched_picks,
-                           user_score=user_score,
-                           total_score=total_score,
-                           current_week=current_week,
-                           deadline_passed=not check_picks_deadline())
-
-
-@app.route('/admin/debug_api/<int:week>')
-def debug_api(week):
-    """Función de debug para ver la respuesta cruda de ESPN API."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return 'Access denied'
-    
-    try:
-        # Probar con ambos años
-        for year in [2024, 2025]:
-            url = f'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week={week}&year={year}'
-            response = requests.get(url, timeout=10, verify=False)
-            data = response.json()
-            
-            print(f"\n=== DEBUG API YEAR {year} WEEK {week} ===")
-            print(f"URL: {url}")
-            print(f"Events found: {len(data.get('events', []))}")
-            
-            if data.get('events'):
-                for event in data.get('events', [])[:2]:  # Solo los primeros 2 eventos
-                    competition = event.get('competitions', [{}])[0]
-                    status = competition.get('status', {})
-                    print(f"Game ID: {event.get('id')}")
-                    print(f"Status object: {status}")
-                    print(f"Status type: {status.get('type', {})}")
-                    print(f"Status name: {status.get('type', {}).get('name', '')}")
-                    print("---")
-        
-        return f"Check terminal for debug info for week {week}"
-        
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-
-@app.route('/admin/view_week_games')
-def admin_view_week_games():
-    """Ver partidos de una semana específica para el administrador."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return '<div class="text-red-600">Acceso denegado</div>'
-    
-    week = request.args.get('week', type=int)
-    if not week:
-        return '<div class="text-red-600">Semana inválida</div>'
-    
-    try:
-        # Obtener datos de la semana específica
-        teams, games = get_espn_nfl_data(week)
-        
-        if not games:
-            return f'<div class="text-yellow-600 p-4 bg-yellow-50 rounded-lg">No se encontraron partidos para la semana {week}</div>'
-        
-        # Contar juegos completados y en progreso
-        completed_games = sum(1 for game in games if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'])
-        in_progress_games = sum(1 for game in games if game.get('status') == 'STATUS_IN_PROGRESS')
-        
-        return render_template('admin_week_games_partial.html', 
-                             games=games, 
-                             week=week,
-                             completed_games=completed_games,
-                             in_progress_games=in_progress_games,
-                             total_games=len(games))
-    
-    except Exception as e:
-        return f'<div class="text-red-600 p-4 bg-red-50 rounded-lg">Error: {str(e)}</div>'
-
-
-@app.route('/update_week', methods=['POST'])
-def update_week():
-    """Actualiza la semana actual del sistema."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return render_template('toast_partial.html',
-                               category='error',
-                               message='Acceso denegado')
-    
-    new_week = request.form.get('new_week', type=int)
-    if not new_week or new_week < 1 or new_week > 18:
-        return render_template('toast_partial.html',
-                               category='error',
-                               message='Semana inválida (debe ser entre 1 y 18)')
-    
-    try:
-        set_current_week(new_week)
-        return render_template('toast_partial.html',
-                               category='success',
-                               message=f'Semana actual actualizada a: Semana {new_week}')
-    except Exception as e:
-        return render_template('toast_partial.html',
-                               category='error',
-                               message=f'Error al actualizar semana: {str(e)}')
-
-
-@app.route('/process_results', methods=['POST'])
-def process_results():
-    """Procesa los resultados de una semana específica desde la API de ESPN."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return render_template('toast_partial.html',
-                               category='error',
-                               message='Acceso denegado')
-    
-    week = request.form.get('week', type=int)
-    if not week:
-        return render_template('toast_partial.html',
-                               category='error',
-                               message='Semana inválida')
-    
-    try:
-        # Obtener datos reales de la API de ESPN para la semana especificada
-        teams, games = get_espn_nfl_data(week)
-        
-        if not games:
-            return render_template('toast_partial.html',
-                                   category='error',
-                                   message=f'No se pudieron obtener los juegos de la semana {week}')
-        
-        db = get_db()
-        results_processed = 0
-        
-        # Procesar cada juego para encontrar ganadores
-        for game in games:
-            game_id = game.get('id')
-            status = game.get('status', '')
-            home_team = game.get('home_team', '')
-            away_team = game.get('away_team', '')
-            home_score = game.get('home_score', 0)
-            away_score = game.get('away_score', 0)
-            
-            # Solo procesar juegos completados
-            if status in ['STATUS_FINAL', 'Final', 'Completed', 'final'] and home_score != away_score:
-                # Determinar el ganador
-                if home_score > away_score:
-                    winner = home_team
-                else:
-                    winner = away_team
-                
-                # Insertar o actualizar resultado
-                db.execute('''
-                    INSERT OR REPLACE INTO game_results (week, game_id, winner, home_team, away_team, home_score, away_score)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (week, game_id, winner, home_team, away_team, home_score, away_score))
-                
-                results_processed += 1
-        
-        db.commit()
-        db.close()
-        
-        if results_processed > 0:
-            return render_template('toast_partial.html',
-                                   category='success',
-                                   message=f'Procesados {results_processed} resultados para la semana {week}')
-        else:
-            return render_template('toast_partial.html',
-                                   category='warning',
-                                   message=f'No se encontraron juegos completados en la semana {week}')
-    
-    except Exception as e:
-        print(f"Error procesando resultados: {e}")
-        return render_template('toast_partial.html',
-                               category='error',
-                               message=f'Error al procesar resultados: {str(e)}')
-
-
-@app.route('/declare_winner', methods=['POST'])
-def declare_winner():
-    """Declara el ganador de una semana específica."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return render_template('toast_partial.html',
-                               category='error',
-                               message='Acceso denegado')
-    
-    week = request.form.get('week', type=int)
-    if not week:
-        return render_template('toast_partial.html',
-                               category='error',
-                               message='Semana inválida')
-    
-    try:
-        db = get_db()
-        
-        # Calcular ganador de la semana
-        winner = db.execute('''
-            SELECT u.username, COUNT(*) as score
-            FROM users u
-            JOIN picks p ON u.id = p.user_id
-            JOIN game_results gr ON p.game_id = gr.game_id AND p.week = gr.week
-            WHERE p.week = ? AND p.selection = gr.winner AND u.is_admin = 0
-            GROUP BY u.id, u.username
-            ORDER BY score DESC
-            LIMIT 1
-        ''', (week,)).fetchone()
-        
-        if winner:
-            # Insertar en historial de ganadores
-            db.execute('''
-                INSERT OR REPLACE INTO winners_history (week, username, score)
-                VALUES (?, ?, ?)
-            ''', (week, winner['username'], winner['score']))
-            
-            db.commit()
-            db.close()
-            
-            return render_template('toast_partial.html',
-                                   category='success',
-                                   message=f'Ganador declarado: {winner["username"]} ({winner["score"]} puntos)')
-        else:
-            db.close()
-            return render_template('toast_partial.html',
-                                   category='error',
-                                   message='No se pudo determinar un ganador')
-    
-    except Exception as e:
-        return render_template('toast_partial.html',
-                               category='error',
-                               message='Error al declarar ganador')
-
-@app.route('/admin/update_week', methods=['POST'])
-def update_current_week():
-    """Actualiza la semana actual y desbloquea automáticamente los picks para la nueva semana."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return render_template('toast_partial.html', 
-                             category='error', 
-                             message='Acceso denegado')
-    
-    new_week = request.form.get('week', type=int)
-    if not new_week or new_week < 1 or new_week > 18:
-        return render_template('toast_partial.html', 
-                             category='error', 
-                             message='Semana inválida (1-18)')
-    
-    try:
-        db = get_db()
-        # Corregir la consulta SQL - usar config_value en lugar de current_week
-        db.execute('UPDATE system_config SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?', (str(new_week), 'current_week'))
-        
-        # Desbloquear picks automáticamente cuando se cambia la semana
-        db.execute('UPDATE system_config SET config_value = ? WHERE config_key = ?', ('0', 'picks_locked'))
-        
-        db.commit()
-        db.close()
-        
-        return render_template('toast_partial.html', 
-                             category='success', 
-                             message=f'Semana actualizada a {new_week} y picks desbloqueados automáticamente')
-    
-    except Exception as e:
-        print(f"Error al actualizar semana: {e}")  # Para debug
-        return render_template('toast_partial.html', 
-                             category='error', 
-                             message='Error al actualizar semana')
-
-@app.route('/admin/toggle_picks', methods=['POST'])
-def toggle_picks_lock():
-    """Alterna el estado de bloqueo de picks (control manual únicamente)."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return render_template('toast_partial.html', 
-                             category='error', 
-                             message='Acceso denegado')
-    
-    try:
-        db = get_db()
-        config = db.execute('SELECT config_value FROM system_config WHERE config_key = ?', ('picks_locked',)).fetchone()
-        current_state = int(config['config_value']) if config else 0
-        new_state = 0 if current_state else 1
-        
-        # Actualizar el estado de bloqueo
-        db.execute('UPDATE system_config SET config_value = ?, updated_at = CURRENT_TIMESTAMP WHERE config_key = ?', (str(new_state), 'picks_locked'))
-        db.commit()
-        db.close()
-        
-        status_text = 'bloqueados' if new_state else 'desbloqueados'
-        return render_template('toast_partial.html', 
-                             category='success', 
-                             message=f'Picks {status_text} manualmente')
-    
-    except Exception as e:
-        print(f"Error al cambiar estado de picks: {e}")  # Para debug
-        return render_template('toast_partial.html', 
-                             category='error', 
-                             message='Error al cambiar estado de picks')
-
-@app.route('/admin/create_league', methods=['GET', 'POST'])
-def admin_create_league():
-    """Crear una nueva liga (solo admin)."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return render_template('toast_partial.html', 
-                             category='error', 
-                             message='Acceso denegado')
-    
-    if request.method == 'GET':
-        return render_template('create_league_modal.html')
-    
-    # POST - Crear liga
-    name = request.form.get('name', '').strip()
-    description = request.form.get('description', '').strip()
-    max_members = request.form.get('max_members', 50, type=int)
-    
-    if not name:
-        return render_template('toast_partial.html', 
-                             category='error', 
-                             message='El nombre de la liga es requerido')
-    
-    if max_members < 2 or max_members > 100:
-        return render_template('toast_partial.html', 
-                             category='error', 
-                             message='El límite de miembros debe estar entre 2 y 100')
-    
-    result = create_league(name, description, session['user_id'], max_members)
-    
-    if result['success']:
-        return render_template('toast_partial.html', 
-                             category='success', 
-                             message=f'Liga "{name}" creada exitosamente. Código: {result["code"]}')
-    else:
-        return render_template('toast_partial.html', 
-                             category='error', 
-                             message=f'Error al crear liga: {result["error"]}')
-
-@app.route('/admin/leagues')
-def admin_leagues():
-    """Ver todas las ligas (solo admin)."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        flash('Acceso denegado', 'error')
         return redirect(url_for('login'))
     
-    db = get_db()
-    leagues = db.execute('''
-        SELECT l.*, u.username as creator_name,
-               (SELECT COUNT(*) FROM league_memberships WHERE league_id = l.id AND is_active = 1) as member_count
-        FROM leagues l
-        JOIN users u ON l.created_by = u.id
-        ORDER BY l.created_at DESC
-    ''').fetchall()
-    db.close()
-    
-    return render_template('admin_leagues.html', leagues=leagues)
+    try:
+        user = User.get_by_id(session['user_id'])
+        current_week = get_current_week()
+        
+        user_leagues = get_user_leagues(user.id)
+        leagues_status = []
+        
+        for league in user_leagues:
+            # Contar picks del usuario en esta liga para la semana actual
+            picks_count = Pick.select().where(
+                (Pick.user == user) & 
+                (Pick.league_id == league.id) & 
+                (Pick.week == current_week)
+            ).count()
+            
+            # Contar total de juegos disponibles
+            games = get_espn_nfl_data(current_week)
+            total_games = len(games)
+            
+            leagues_status.append({
+                'league': league,
+                'picks_made': picks_count,
+                'total_games': total_games,
+                'completed': picks_count == total_games
+            })
+        
+        return render_template('user_picks_status.html',
+                             leagues_status=leagues_status,
+                             current_week=current_week)
+                             
+    except Exception as e:
+        print(f"Error in user_picks_status: {e}")
+        return render_template('user_picks_status.html', leagues_status=[], current_week=0)
 
 @app.route('/join_league', methods=['GET', 'POST'])
 def join_league_route():
-    """Permite al usuario unirse a una liga con código."""
+    """Permite al usuario unirse a una liga con código"""
     if 'user_id' not in session:
         flash('Debes iniciar sesión', 'error')
         return redirect(url_for('login'))
@@ -1290,7 +832,7 @@ def join_league_route():
                              category='error', 
                              message='El código de liga es requerido')
     
-    result = join_league(session['user_id'], league_code)
+    result = join_league_by_code(session['user_id'], league_code)
     
     if result['success']:
         return render_template('toast_partial.html', 
@@ -1301,132 +843,167 @@ def join_league_route():
                              category='error', 
                              message=result['error'])
 
-@app.route('/my_leagues')
-def my_leagues():
-    """Ver las ligas del usuario."""
-    if 'user_id' not in session:
-        flash('Debes iniciar sesión', 'error')
-        return redirect(url_for('login'))
-    
-    leagues = get_user_leagues(session['user_id'])
-    return render_template('my_leagues.html', leagues=leagues)
-
-@app.route('/admin/stats')
-def admin_stats():
-    """Retorna las estadísticas actualizadas del dashboard de admin."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Acceso denegado'}), 403
-    
-    try:
-        db = get_db()
-        current_week = get_current_week()
-        config = get_system_config()
-        
-        # Total usuarios
-        total_users = db.execute('SELECT COUNT(*) as count FROM users').fetchone()['count']
-        
-        # Picks enviados esta semana
-        picks_submitted = db.execute(
-            'SELECT COUNT(DISTINCT user_id) as count FROM picks WHERE week = ?', 
-            (current_week,)
-        ).fetchone()['count']
-        
-        # Resultados procesados
-        processed_results = db.execute(
-            'SELECT COUNT(*) as count FROM game_results WHERE week = ?', 
-            (current_week,)
-        ).fetchone()['count']
-        
-        db.close()
-        
-        return jsonify({
-            'total_users': total_users,
-            'picks_submitted': picks_submitted,
-            'processed_results': processed_results,
-            'current_week': current_week,
-            'picks_locked': config.get('picks_locked', '0') == '1',
-            'picks_locked_text': 'Bloqueados' if config.get('picks_locked', '0') == '1' else 'Abiertos'
-        })
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/admin/stats')
-def admin_stats_api():
-    """API endpoint para obtener estadísticas del admin dinámicamente."""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Acceso denegado'}), 403
-    
-    try:
-        db = get_db()
-        config = get_system_config()
-        current_week = get_current_week()
-        
-        # Total de usuarios
-        total_users = db.execute('SELECT COUNT(*) as count FROM users WHERE is_admin = 0').fetchone()['count']
-        
-        # Picks enviados para la semana actual
-        picks_submitted = db.execute('''
-            SELECT COUNT(DISTINCT user_id) as count 
-            FROM picks 
-            WHERE week = ?
-        ''', (current_week,)).fetchone()['count']
-        
-        # Resultados procesados
-        processed_results = db.execute('SELECT COUNT(*) as count FROM game_results').fetchone()['count']
-        
-        # Estado de picks
-        picks_locked = config.get('picks_locked', '0') == '1'
-        picks_locked_text = 'Bloqueados' if picks_locked else 'Abiertos'
-        
-        db.close()
-        
-        return jsonify({
-            'total_users': total_users,
-            'picks_submitted': picks_submitted,
-            'current_week': current_week,
-            'processed_results': processed_results,
-            'picks_locked': picks_locked,
-            'picks_locked_text': picks_locked_text
-        })
-        
-    except Exception as e:
-        print(f"Error en admin_stats_api: {e}")
-        return jsonify({'error': 'Error interno del servidor'}), 500
-
 @app.route('/games_status')
 def games_status():
-    """Retorna el estado de los partidos de la semana actual."""
-    current_week = get_current_week()
-    teams, games = get_espn_nfl_data(current_week)
+    """Estado de juegos con picks"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     
-    # Agregar timestamp de última actualización
-    from datetime import datetime, timedelta
-    now_cdmx = datetime.now() - timedelta(hours=6)  # Convertir a CDMX
-    last_update_mex = now_cdmx.strftime('%d/%m %H:%M')
-    
-    return render_template('games_status_partial.html', 
-                         games=games, 
-                         teams=teams, 
-                         current_week=current_week,
-                         last_update_mex=last_update_mex)
+    try:
+        user = User.get_by_id(session['user_id'])
+        current_week = get_current_week()
+        games = get_espn_nfl_data(current_week)
+        
+        # Obtener resultados si existen
+        results = GameResult.select().where(GameResult.week == current_week)
+        results_dict = {result.game_id: result for result in results}
+        
+        # Obtener picks del usuario para esta semana
+        user_picks_by_game = {}
+        
+        # Solo obtener picks si el usuario no es admin
+        if not user.is_admin:
+            current_league_id = session.get('current_league_id')
+            if current_league_id:
+                current_league = League.get_by_id(current_league_id)
+                picks = Pick.select().where(
+                    (Pick.user == user) & 
+                    (Pick.league_id == current_league.id) & 
+                    (Pick.week == current_week)
+                )
+                
+                for pick in picks:
+                    game_id = pick.game_id
+                    
+                    # Procesar pick.selection para manejar diferentes formatos
+                    picked_team_data = None
+                    
+                    if isinstance(pick.selection, dict):
+                        picked_team_data = pick.selection
+                    elif isinstance(pick.selection, str):
+                        # Intentar parsear como JSON si parece un diccionario
+                        try:
+                            import json
+                            if pick.selection.startswith('{') and pick.selection.endswith('}'):
+                                # Convertir comillas simples a dobles para JSON válido
+                                json_string = pick.selection.replace("'", '"')
+                                picked_team_data = json.loads(json_string)
+                            else:
+                                # Es solo un string simple (abreviatura o nombre)
+                                picked_team_data = {'name': pick.selection, 'abbreviation': pick.selection}
+                        except (json.JSONDecodeError, ValueError):
+                            # No es JSON válido, tratar como string simple
+                            picked_team_data = {'name': pick.selection, 'abbreviation': pick.selection}
+                    else:
+                        # Otros tipos, convertir a string
+                        selection_str = str(pick.selection)
+                        picked_team_data = {'name': selection_str, 'abbreviation': selection_str}
+                    
+                    picked_team_name = picked_team_data.get('name', '')
+                    picked_team_abbr = picked_team_data.get('abbreviation', '')
+                    picked_team_for_comparison = picked_team_abbr or picked_team_name
+                    
+                    user_picks_by_game[game_id] = {
+                        'picked_team': {
+                            'name': picked_team_name,
+                            'abbreviation': picked_team_abbr
+                        },
+                        'result': None  # Se calculará si hay resultado
+                    }
+                    
+                    # Si hay resultado, determinar si el pick fue correcto
+                    if game_id in results_dict:
+                        result = results_dict[game_id]
+                        if picked_team_for_comparison == result.winner:
+                            user_picks_by_game[game_id]['result'] = 'correct'
+                        else:
+                            user_picks_by_game[game_id]['result'] = 'incorrect'
+        
+        # Agregar resultados a los juegos
+        for game in games:
+            game_id = game['id']
+            if game_id in results_dict:
+                result = results_dict[game_id]
+                game['result'] = {
+                    'winner': result.winner,
+                    'home_score': result.home_score,
+                    'away_score': result.away_score
+                }
+        
+        # Obtener última actualización
+        from datetime import datetime, timezone, timedelta
+        try:
+            from zoneinfo import ZoneInfo
+            cdmx_tz = ZoneInfo('America/Mexico_City')
+        except ImportError:
+            # Fallback para sistemas sin zoneinfo
+            from datetime import timezone
+            cdmx_tz = timezone(timedelta(hours=-6))  # CDMX es UTC-6
+        
+        # Convertir horarios a CDMX y generar timestamp de última actualización
+        utc_now = datetime.now(timezone.utc)
+        last_update_mex = utc_now.astimezone(cdmx_tz).strftime('%d/%m/%Y %I:%M %p CDMX')
+        
+        # Convertir horarios de juegos a CDMX
+        for game in games:
+            if game.get('date'):
+                try:
+                    # Parsear fecha ISO
+                    game_date = datetime.fromisoformat(game['date'].replace('Z', '+00:00'))
+                    # Convertir a CDMX
+                    game_date_mex = game_date.astimezone(cdmx_tz)
+                    
+                    # Obtener día de la semana en español
+                    dias_semana = {
+                        0: 'Lun', 1: 'Mar', 2: 'Mié', 3: 'Jue', 
+                        4: 'Vie', 5: 'Sáb', 6: 'Dom'
+                    }
+                    dia_semana = dias_semana[game_date_mex.weekday()]
+                    
+                    # Formatear con día, fecha y hora
+                    game['start_time'] = f"{dia_semana} {game_date_mex.strftime('%d/%m')} {game_date_mex.strftime('%I:%M %p')}"
+                except Exception as time_error:
+                    print(f"Error converting time for game {game.get('id', '')}: {time_error}")
+                    # Mantener el valor original si falla la conversión
+                    pass
+        
+        # Debug: imprimir user_picks_by_game para verificar formato
+        return render_template('games_status_with_picks.html',
+                             games=games,
+                             current_week=current_week,
+                             user_picks_by_game=user_picks_by_game,
+                             last_update_mex=last_update_mex)
+                             
+    except Exception as e:
+        print(f"Error in games_status: {e}")
+        return render_template('games_status_with_picks.html', 
+                             games=[], 
+                             current_week=0,
+                             user_picks_by_game={})
 
-
-# --- Inicio de la Aplicación ---
-
-# Inicializar la base de datos automáticamente cuando se importa el módulo
-# Esto garantiza que funcione tanto en desarrollo como en producción (PythonAnywhere)
-init_db()
-
-# Inicializar base de datos y monitor al cargar la aplicación
-create_tables()
+# =============================================================================
+# LEGACY ADMIN ROUTES MOVED TO BLUEPRINTS
+# =============================================================================
+# All admin routes have been moved to blueprints/admin_routes.py
+# The admin blueprint is registered above and handles all /admin/* routes
 
 if __name__ == '__main__':
-    import os
-    # Para desarrollo local
-    if os.environ.get('ENVIRONMENT') == 'development':
-        app.run(debug=True)
+    # Configuración según entorno - desarrollo vs producción
+    debug_mode = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
+    
+    # Reloader habilitado por defecto en desarrollo, deshabilitado en producción
+    default_reloader = 'True' if debug_mode else 'False'
+    use_reloader = os.environ.get('FLASK_USE_RELOADER', default_reloader).lower() == 'true'
+    
+    port = int(os.environ.get('FLASK_PORT', 8000))
+    
+    # Información del modo de ejecución
+    if debug_mode:
+        if use_reloader:
+            print("🔄 Modo desarrollo - Hot-reload activado")
+        else:
+            print("⚡ Modo desarrollo - Hot-reload deshabilitado")
     else:
-        # Para producción (Render, PythonAnywhere, etc.)
-        port = int(os.environ.get('PORT', 5000))
-        app.run(host='0.0.0.0', port=port, debug=False)
+        print("🚀 Modo producción - Optimizado para rendimiento")
+    
+    app.run(debug=debug_mode, port=port, use_reloader=use_reloader)

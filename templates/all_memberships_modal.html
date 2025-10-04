@@ -1,0 +1,205 @@
+<!-- Modal para ver todas las membresías -->
+<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" id="all-memberships-modal">
+    <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-5/6 lg:w-4/5 xl:w-3/4 shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-900">Gestión de Todas las Membresías</h3>
+            <button onclick="document.getElementById('all-memberships-modal').remove()" 
+                    class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Estadísticas generales -->
+        <div class="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div class="text-center">
+                    <p class="text-2xl font-bold text-blue-600">{{ stats.total_users_with_membership or 0 }}</p>
+                    <p class="text-sm text-blue-800">Usuarios con Membresías</p>
+                </div>
+            </div>
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div class="text-center">
+                    <p class="text-2xl font-bold text-green-600">{{ stats.total_leagues_with_members or 0 }}</p>
+                    <p class="text-sm text-green-800">Ligas con Miembros</p>
+                </div>
+            </div>
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div class="text-center">
+                    <p class="text-2xl font-bold text-purple-600">{{ stats.total_memberships or 0 }}</p>
+                    <p class="text-sm text-purple-800">Total Membresías</p>
+                </div>
+            </div>
+            <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <div class="text-center">
+                    <p class="text-2xl font-bold text-orange-600">{{ "%.1f"|format(stats.avg_members_per_league or 0) }}</p>
+                    <p class="text-sm text-orange-800">Promedio Miembros/Liga</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="mb-4 bg-gray-50 p-4 rounded-lg">
+            <div class="flex flex-wrap gap-4 items-center">
+                <div>
+                    <label for="filter-league" class="block text-sm font-medium text-gray-700 mb-1">Filtrar por Liga:</label>
+                    <select id="filter-league" class="px-3 py-2 border border-gray-300 rounded-md text-sm">
+                        <option value="">Todas las ligas</option>
+                        {% set leagues = memberships | map(attribute='league_name') | list | unique %}
+                        {% for league in leagues %}
+                            <option value="{{ league }}">{{ league }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="filter-user" class="block text-sm font-medium text-gray-700 mb-1">Buscar Usuario:</label>
+                    <input type="text" id="filter-user" placeholder="Nombre de usuario..." 
+                           class="px-3 py-2 border border-gray-300 rounded-md text-sm">
+                </div>
+                <div class="flex items-end">
+                    <button onclick="clearFilters()" class="px-3 py-2 bg-gray-500 text-white rounded-md text-sm hover:bg-gray-600">
+                        Limpiar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tabla de membresías -->
+        <div class="max-h-96 overflow-y-auto">
+            {% if memberships %}
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Liga</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actividad</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gestionar</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="memberships-table-body">
+                    {% for membership in memberships %}
+                    <tr class="membership-row" 
+                        data-league="{{ membership.league_name }}" 
+                        data-user="{{ membership.username|lower }}"
+                        id="membership-{{ membership.id }}">
+                        <td class="px-3 py-3 whitespace-nowrap">
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">{{ membership.league_name }}</p>
+                                <p class="text-xs text-gray-500">{{ membership.league_code }}</p>
+                            </div>
+                        </td>
+                        <td class="px-3 py-3 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                                    <span class="text-sm font-medium text-gray-700">{{ membership.username[0].upper() }}</span>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium text-gray-900">{{ membership.username }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {{ membership.joined_at[:10] if membership.joined_at else 'N/A' }}
+                        </td>
+                        <td class="px-3 py-3 whitespace-nowrap text-sm text-center">
+                            <span class="font-medium text-blue-600">{{ membership.total_picks or 0 }}</span>
+                        </td>
+                        <td class="px-3 py-3 whitespace-nowrap text-center">
+                            <button hx-post="{{ url_for('admin_remove_user_from_league') }}"
+                                    hx-vals='{"user_id": "{{ membership.user_id }}", "league_id": "{{ membership.league_id }}"}'
+                                    hx-target="#membership-{{ membership.id }}"
+                                    hx-swap="outerHTML"
+                                    hx-confirm="¿Remover a {{ membership.username }} de {{ membership.league_name }}?"
+                                    class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                                Remover
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="text-center py-8">
+                <div class="text-gray-400 mb-4">
+                    <svg class="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No hay membresías</h3>
+                <p class="text-gray-500">No hay usuarios registrados en ninguna liga.</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Notificaciones -->
+        <div id="memberships-notifications" class="mt-4"></div>
+        
+        <div class="mt-6 flex justify-end">
+            <button onclick="document.getElementById('all-memberships-modal').remove()" 
+                    class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                Cerrar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-focus modal para accesibilidad
+document.getElementById('all-memberships-modal').focus();
+
+// Filtros en tiempo real
+function filterMemberships() {
+    const leagueFilter = document.getElementById('filter-league').value.toLowerCase();
+    const userFilter = document.getElementById('filter-user').value.toLowerCase();
+    const rows = document.querySelectorAll('.membership-row');
+    
+    rows.forEach(row => {
+        const league = row.getAttribute('data-league').toLowerCase();
+        const user = row.getAttribute('data-user');
+        
+        const matchesLeague = !leagueFilter || league.includes(leagueFilter);
+        const matchesUser = !userFilter || user.includes(userFilter);
+        
+        if (matchesLeague && matchesUser) {
+            row.style.display = 'table-row';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Contar filas visibles
+    const visibleRows = Array.from(rows).filter(row => row.style.display !== 'none');
+    if (visibleRows.length === 0 && (leagueFilter || userFilter)) {
+        // Mostrar mensaje de "no encontrado" si hay filtros activos
+        console.log('No se encontraron resultados con los filtros aplicados');
+    }
+}
+
+function clearFilters() {
+    document.getElementById('filter-league').value = '';
+    document.getElementById('filter-user').value = '';
+    filterMemberships();
+}
+
+// Agregar event listeners para filtros
+document.getElementById('filter-league').addEventListener('change', filterMemberships);
+document.getElementById('filter-user').addEventListener('input', filterMemberships);
+
+// Manejar respuestas HTMX para remover membresías
+document.body.addEventListener('htmx:afterRequest', function(event) {
+    if (event.detail.xhr.status === 200 && event.target.closest('#all-memberships-modal')) {
+        const response = event.detail.xhr.responseText;
+        if (response.includes('success') && response.includes('removido')) {
+            const notification = document.getElementById('memberships-notifications');
+            if (notification) {
+                notification.innerHTML = response;
+                setTimeout(() => {
+                    notification.innerHTML = '';
+                }, 3000);
+            }
+        }
+    }
+});
+</script>
