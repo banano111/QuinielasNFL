@@ -17,7 +17,17 @@ else:
         # Producción (Render) - usa DATABASE_URL
         if database_url.startswith('postgres://'):
             database_url = database_url.replace('postgres://', 'postgresql://', 1)
-        database = PostgresqlDatabase(database_url)
+        
+        # Parse DATABASE_URL para extraer componentes
+        from urllib.parse import urlparse
+        result = urlparse(database_url)
+        database = PostgresqlDatabase(
+            result.path[1:],  # nombre de la base de datos (sin el / inicial)
+            user=result.username,
+            password=result.password,
+            host=result.hostname,
+            port=result.port or 5432
+        )
     else:
         # Desarrollo local - usa variables individuales
         database = PostgresqlDatabase(
