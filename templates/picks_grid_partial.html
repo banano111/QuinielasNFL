@@ -99,21 +99,24 @@
                             <div class="flex flex-col items-center space-y-1">
                                 <!-- Away @ Home -->
                                 <div class="flex items-center space-x-1">
+                                    {% set away_team_name = game.away_team.name if game.away_team is mapping else game.away_team %}
+                                    {% set home_team_name = game.home_team.name if game.home_team is mapping else game.home_team %}
+                                    
                                     {% if game.get('away_logo') %}
-                                        <img src="{{ game.away_logo }}" alt="{{ game.away_team }}" class="w-3 h-3">
+                                        <img src="{{ game.away_logo }}" alt="{{ away_team_name }}" class="w-3 h-3">
                                     {% else %}
                                         <div class="w-3 h-3 bg-gray-200 rounded-full flex items-center justify-center">
-                                            <span class="text-xs">{{ game.away_team[:1] if game.away_team else '?' }}</span>
+                                            <span class="text-xs">{{ away_team_name[:1] if away_team_name else '?' }}</span>
                                         </div>
                                     {% endif %}
                                     
                                     <span class="text-xs text-gray-500">@</span>
                                     
                                     {% if game.get('home_logo') %}
-                                        <img src="{{ game.home_logo }}" alt="{{ game.home_team }}" class="w-3 h-3">
+                                        <img src="{{ game.home_logo }}" alt="{{ home_team_name }}" class="w-3 h-3">
                                     {% else %}
                                         <div class="w-3 h-3 bg-gray-200 rounded-full flex items-center justify-center">
-                                            <span class="text-xs">{{ game.home_team[:1] if game.home_team else '?' }}</span>
+                                            <span class="text-xs">{{ home_team_name[:1] if home_team_name else '?' }}</span>
                                         </div>
                                     {% endif %}
                                 </div>
@@ -136,24 +139,38 @@
                             <div class="cell pick-cell">
                                 {% set user_pick = picks_matrix.get(user.id, {}).get(game.id) %}
                                 {% if user_pick %}
+                                    {% set home_team_name = game.home_team.name if game.home_team is mapping else game.home_team %}
+                                    {% set away_team_name = game.away_team.name if game.away_team is mapping else game.away_team %}
+                                    {% set home_team_abbr = game.home_team.abbreviation if game.home_team is mapping else home_team_name %}
+                                    {% set away_team_abbr = game.away_team.abbreviation if game.away_team is mapping else away_team_name %}
+                                    
                                     <div class="flex flex-col items-center space-y-1">
                                         <!-- Team Logo del Pick -->
-                                        {% if user_pick.selection == game.home_team %}
+                                        {# Now selection is always a dict with name and abbreviation #}
+                                        {% set pick_name = user_pick.selection.name %}
+                                        {% set pick_abbr = user_pick.selection.abbreviation %}
+                                        
+                                        {% if pick_name == home_team_name or pick_abbr == home_team_abbr %}
                                             {% if game.get('home_logo') %}
-                                                <img src="{{ game.home_logo }}" alt="{{ user_pick.selection }}" class="w-5 h-5">
+                                                <img src="{{ game.home_logo }}" alt="{{ pick_name }}" class="w-5 h-5 object-contain">
                                             {% else %}
                                                 <div class="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
-                                                    <span class="text-xs">{{ user_pick.selection[:1] }}</span>
+                                                    <span class="text-xs font-bold">{{ home_team_abbr[:2] }}</span>
+                                                </div>
+                                            {% endif %}
+                                        {% elif pick_name == away_team_name or pick_abbr == away_team_abbr %}
+                                            {% if game.get('away_logo') %}
+                                                <img src="{{ game.away_logo }}" alt="{{ pick_name }}" class="w-5 h-5 object-contain">
+                                            {% else %}
+                                                <div class="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
+                                                    <span class="text-xs font-bold">{{ away_team_abbr[:2] }}</span>
                                                 </div>
                                             {% endif %}
                                         {% else %}
-                                            {% if game.get('away_logo') %}
-                                                <img src="{{ game.away_logo }}" alt="{{ user_pick.selection }}" class="w-5 h-5">
-                                            {% else %}
-                                                <div class="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
-                                                    <span class="text-xs">{{ user_pick.selection[:1] }}</span>
-                                                </div>
-                                            {% endif %}
+                                            <!-- Pick no coincide con equipos actuales -->
+                                            <div class="w-5 h-5 bg-orange-200 rounded-full flex items-center justify-center">
+                                                <span class="text-xs font-bold">{{ pick_abbr[:2] if pick_abbr else '?' }}</span>
+                                            </div>
                                         {% endif %}
                                         
                                         <!-- Result Icon -->

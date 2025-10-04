@@ -1,0 +1,20 @@
+<div id="leagues-list">
+    <h4 class="text-md font-medium text-gray-900 mb-4">Ligas Existentes</h4>
+    {% if leagues %}
+        <div class="space-y-2">
+            {% for league in leagues %}
+            <div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                <div>
+                    <p class="font-medium text-gray-900">{{ league.name }}</p>
+                    <p class="text-sm text-gray-500">Código: {{ league.code }} | Miembros: {{ league.memberships.count() }}</p>
+                </div>
+                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {% if league.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                    {% if league.is_active %}Activa{% else %}Inactiva{% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-gray-500 text-center py-8">No hay ligas creadas</p>
+    {% endif %}
+</div>

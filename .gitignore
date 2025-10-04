@@ -27,6 +27,8 @@ MANIFEST
 *.sqlite3
 database.db
 data/
+quiniela.db*
+*.db.backup
 
 # Environment variables
 .env
@@ -36,6 +38,12 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Backup files
+*_backup.py
+*_old.py
+*_temp.py
+backup_*.sh
 
 # IDE
 .vscode/

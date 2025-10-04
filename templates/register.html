@@ -79,6 +79,49 @@
         <!-- Formulario de registro -->
         <div class="bg-white py-8 px-6 shadow-xl rounded-2xl border border-gray-100">
             <form method="POST" class="space-y-6">
+                <!-- Nombre y Apellido -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="first_name" class="block text-sm font-medium text-gray-700 mb-2">
+                            Nombre
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                            </div>
+                            <input id="first_name" 
+                                   name="first_name" 
+                                   type="text" 
+                                   required 
+                                   minlength="2"
+                                   class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-nflgreen focus:border-transparent transition duration-150 ease-in-out"
+                                   placeholder="Tu nombre">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="last_name" class="block text-sm font-medium text-gray-700 mb-2">
+                            Apellido
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                            </div>
+                            <input id="last_name" 
+                                   name="last_name" 
+                                   type="text" 
+                                   required 
+                                   minlength="2"
+                                   class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-nflgreen focus:border-transparent transition duration-150 ease-in-out"
+                                   placeholder="Tu apellido">
+                        </div>
+                    </div>
+                </div>
+
                 <div>
                     <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
                         Nombre de Usuario
@@ -86,7 +129,7 @@
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a1.994 1.994 0 01-1.414.586H7a4 4 0 01-4-4V7a4 4 0 014-4z"></path>
                             </svg>
                         </div>
                         <input id="username" 
@@ -97,6 +140,29 @@
                                class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-nflgreen focus:border-transparent transition duration-150 ease-in-out"
                                placeholder="Mínimo 3 caracteres">
                     </div>
+                </div>
+
+                <!-- Código de Acceso de Liga -->
+                <div>
+                    <label for="league_code" class="block text-sm font-medium text-gray-700 mb-2">
+                        Código de Acceso de Liga
+                    </label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-6 6c-2.674 0-5.047-1.076-6.782-2.818m0 0L7.5 20.5 5 18 4.218 16.218m0 0a6 6 0 016-6M7 7h.01M17 13a5.99 5.99 0 00-4.818-5.829"></path>
+                            </svg>
+                        </div>
+                        <input id="league_code" 
+                               name="league_code" 
+                               type="text" 
+                               required 
+                               class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-nflgreen focus:border-transparent transition duration-150 ease-in-out"
+                               placeholder="Ingresa el código de acceso proporcionado">
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Solicita el código de acceso al administrador de la liga
+                    </p>
                 </div>
 
                 <div>
@@ -176,9 +242,10 @@
                     </h3>
                     <div class="mt-2 text-sm text-green-700">
                         <ul class="list-disc list-inside space-y-1">
+                            <li>Nombre y apellido completos</li>
                             <li>Nombre de usuario único (mínimo 3 caracteres)</li>
                             <li>Contraseña segura (mínimo 6 caracteres)</li>
-                            <li>Solo para uso del grupo privado</li>
+                            <li>Selecciona una liga o crea una nueva</li>
                         </ul>
                     </div>
                 </div>
@@ -191,8 +258,9 @@
         </div>
     </div>
 
-    <!-- Script para validación de contraseñas -->
+    <!-- Script para validación de contraseñas y manejo de ligas -->
     <script>
+        // Validación de contraseñas
         document.getElementById('confirm_password').addEventListener('input', function() {
             const password = document.getElementById('password').value;
             const confirmPassword = this.value;
@@ -203,6 +271,8 @@
                 this.setCustomValidity('');
             }
         });
+
+        // Ya no necesitamos manejo de opciones de liga múltiples
     </script>
 </body>
 </html>

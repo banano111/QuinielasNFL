@@ -7,6 +7,7 @@
                 <span class="text-yellow-600 font-medium animate-pulse">{{ in_progress_games }} En Vivo</span>
             {% endif %}
             <span class="text-gray-500">{{ total_games - completed_games - in_progress_games }} Pendientes</span>
+            <span class="text-blue-600 font-medium">{{ results|length }} Procesados</span>
             <span class="text-gray-700">Total: {{ total_games }}</span>
         </div>
     </div>
@@ -14,56 +15,102 @@
     {% if games %}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {% for game in games %}
-                <div class="bg-white rounded-lg border-2 p-4 {{ 'border-green-300 bg-green-50' if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] else ('border-yellow-400 bg-yellow-50' if game.get('status') == 'STATUS_IN_PROGRESS' else 'border-gray-200') }} shadow-sm hover:shadow-md transition-shadow">
+                {% set is_completed = game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] %}
+                {% set is_in_progress = game.get('status') == 'STATUS_IN_PROGRESS' %}
+                {% set game_id = game.get('game_id') or game.get('id') %}
+                {% set is_processed = game_id and results and game_id in results.keys() %}
+                
+                <div class="bg-white rounded-lg border-2 p-4 relative
+                    {{ 'border-green-300 bg-green-50' if is_completed else ('border-yellow-400 bg-yellow-50' if is_in_progress else 'border-gray-200') }} 
+                    shadow-sm hover:shadow-md transition-shadow">
+                    
+                    <!-- Indicador de Procesado -->
+                    {% if is_processed %}
+                        <div class="absolute top-2 right-2">
+                            <div class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    {% endif %}
                     
                     <!-- Equipos y Scores -->
-                    <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center justify-between mb-3 {{ 'pr-8' if is_processed else '' }}">
                         <!-- Away Team -->
                         <div class="flex flex-col items-center space-y-1">
+                            {% set away_team = game.get('away_team', {}) %}
+                            {% if away_team is mapping %}
+                                {% set away_name = away_team.get('name', away_team.get('displayName', 'Unknown')) %}
+                                {% set away_abbr = away_team.get('abbreviation', away_team.get('abv', '??')) %}
+                            {% else %}
+                                {% set away_name = away_team or 'Unknown' %}
+                                {% set away_abbr = '??' %}
+                            {% endif %}
+                            
                             {% if game.get('away_logo') %}
-                                <img src="{{ game.away_logo }}" alt="{{ game.away_team }}" class="w-8 h-8">
+                                <img src="{{ game.away_logo }}" alt="{{ away_name }}" class="w-8 h-8">
                             {% else %}
                                 <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                                    <span class="text-xs text-gray-500">?</span>
+                                    <span class="text-xs text-gray-500 font-bold">{{ away_abbr[:2] }}</span>
                                 </div>
                             {% endif %}
-                            {% if game.get('away_score') is not none %}
-                                <span class="text-lg font-bold {{ 'text-yellow-600' if game.get('status') == 'STATUS_IN_PROGRESS' else 'text-gray-900' }}">{{ game.away_score }}</span>
-                            {% else %}
-                                <span class="text-sm text-gray-400">-</span>
-                            {% endif %}
+                            <div class="text-center">
+                                <div class="text-xs text-gray-600 font-medium">{{ away_name }}</div>
+                                {% if game.get('away_score') is not none %}
+                                    <span class="text-lg font-bold {{ 'text-yellow-600' if is_in_progress else 'text-gray-900' }}">{{ game.away_score }}</span>
+                                {% else %}
+                                    <span class="text-sm text-gray-400">-</span>
+                                {% endif %}
+                            </div>
                         </div>
                         
                         <!-- VS o @ -->
                         <div class="flex flex-col items-center">
                             <span class="text-sm font-medium text-gray-400">@</span>
-                            <span class="text-xs text-gray-400 mt-1">{{ game.start_time if game.start_time else 'TBD' }}</span>
+                            {% if game.get('start_time') %}
+                                <span class="text-xs text-gray-400 mt-1 text-center">{{ game.start_time }}</span>
+                            {% else %}
+                                <span class="text-xs text-gray-400 mt-1">TBD</span>
+                            {% endif %}
                         </div>
                         
                         <!-- Home Team -->
                         <div class="flex flex-col items-center space-y-1">
+                            {% set home_team = game.get('home_team', {}) %}
+                            {% if home_team is mapping %}
+                                {% set home_name = home_team.get('name', home_team.get('displayName', 'Unknown')) %}
+                                {% set home_abbr = home_team.get('abbreviation', home_team.get('abv', '??')) %}
+                            {% else %}
+                                {% set home_name = home_team or 'Unknown' %}
+                                {% set home_abbr = '??' %}
+                            {% endif %}
+                            
                             {% if game.get('home_logo') %}
-                                <img src="{{ game.home_logo }}" alt="{{ game.home_team }}" class="w-8 h-8">
+                                <img src="{{ game.home_logo }}" alt="{{ home_name }}" class="w-8 h-8">
                             {% else %}
                                 <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                                    <span class="text-xs text-gray-500">?</span>
+                                    <span class="text-xs text-gray-500 font-bold">{{ home_abbr[:2] }}</span>
                                 </div>
                             {% endif %}
-                            {% if game.get('home_score') is not none %}
-                                <span class="text-lg font-bold {{ 'text-yellow-600' if game.get('status') == 'STATUS_IN_PROGRESS' else 'text-gray-900' }}">{{ game.home_score }}</span>
-                            {% else %}
-                                <span class="text-sm text-gray-400">-</span>
-                            {% endif %}
+                            <div class="text-center">
+                                <div class="text-xs text-gray-600 font-medium">{{ home_name }}</div>
+                                {% if game.get('home_score') is not none %}
+                                    <span class="text-lg font-bold {{ 'text-yellow-600' if is_in_progress else 'text-gray-900' }}">{{ game.home_score }}</span>
+                                {% else %}
+                                    <span class="text-sm text-gray-400">-</span>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- Status -->
-                    <div class="flex justify-center mb-2">
-                        {% if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] %}
+                    <!-- Status y Procesado -->
+                    <div class="flex justify-center mb-2 space-x-2">
+                        {% if is_completed %}
                             <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                 FINAL
                             </span>
-                        {% elif game.get('status') == 'STATUS_IN_PROGRESS' %}
+                        {% elif is_in_progress %}
                             <span class="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 animate-pulse">
                                 EN VIVO
                             </span>
@@ -72,24 +119,32 @@
                                 {{ game.get('status', 'Programado') }}
                             </span>
                         {% endif %}
+                        
+                        {% if is_processed %}
+                            <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                PROCESADO
+                            </span>
+                        {% endif %}
                     </div>
                     
                     <!-- Ganador (solo si el juego terminó) -->
-                    {% if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] and game.get('home_score') is not none and game.get('away_score') is not none %}
+                    {% if is_completed and game.get('home_score') is not none and game.get('away_score') is not none %}
                         <div class="flex justify-center">
                             {% if game.home_score > game.away_score %}
                                 <div class="flex items-center space-x-2">
                                     <span class="text-xs text-green-600 font-medium">Ganador:</span>
                                     {% if game.get('home_logo') %}
-                                        <img src="{{ game.home_logo }}" alt="{{ game.home_team }}" class="w-5 h-5">
+                                        <img src="{{ game.home_logo }}" alt="{{ home_name }}" class="w-5 h-5">
                                     {% endif %}
+                                    <span class="text-xs text-green-600 font-medium">{{ home_name }}</span>
                                 </div>
                             {% elif game.away_score > game.home_score %}
                                 <div class="flex items-center space-x-2">
                                     <span class="text-xs text-green-600 font-medium">Ganador:</span>
                                     {% if game.get('away_logo') %}
-                                        <img src="{{ game.away_logo }}" alt="{{ game.away_team }}" class="w-5 h-5">
+                                        <img src="{{ game.away_logo }}" alt="{{ away_name }}" class="w-5 h-5">
                                     {% endif %}
+                                    <span class="text-xs text-green-600 font-medium">{{ away_name }}</span>
                                 </div>
                             {% else %}
                                 <span class="text-xs text-yellow-600 font-medium">Empate</span>
@@ -100,18 +155,49 @@
             {% endfor %}
         </div>
         
+        <!-- Estado de Procesamiento -->
+        {% set processed_count = results|length %}
+        {% set unprocessed_completed = completed_games - processed_count %}
+        
         {% if completed_games > 0 %}
-            <div class="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p class="text-sm text-blue-700">
-                    <strong>{{ completed_games }}</strong> juegos completados están listos para procesar. 
-                    Usa el botón "Procesar Resultados" de abajo para actualizar la base de datos.
-                </p>
-            </div>
+            {% if unprocessed_completed > 0 %}
+                <div class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div class="flex items-center space-x-2">
+                        <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                        <p class="text-sm text-blue-700">
+                            <strong>{{ unprocessed_completed }}</strong> de {{ completed_games }} juegos completados están pendientes de procesar.
+                        </p>
+                    </div>
+                    {% if processed_count > 0 %}
+                        <p class="text-xs text-blue-600 mt-1 ml-7">
+                            {{ processed_count }} juegos ya fueron procesados (marcados con ✓).
+                        </p>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div class="flex items-center space-x-2">
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                        <p class="text-sm text-green-700">
+                            Todos los {{ completed_games }} juegos completados ya han sido procesados.
+                        </p>
+                    </div>
+                </div>
+            {% endif %}
         {% elif completed_games == 0 %}
-            <div class="mt-4 p-3 bg-yellow-50 rounded-lg">
-                <p class="text-sm text-yellow-700">
-                    No hay juegos completados en esta semana aún. Los resultados se podrán procesar cuando los juegos terminen.
-                </p>
+            <div class="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div class="flex items-center space-x-2">
+                    <svg class="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <p class="text-sm text-yellow-700">
+                        No hay juegos completados en esta semana aún. Los resultados se podrán procesar cuando terminen.
+                    </p>
+                </div>
             </div>
         {% endif %}
     {% else %}

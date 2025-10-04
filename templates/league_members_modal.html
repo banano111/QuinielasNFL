@@ -1,0 +1,140 @@
+<!-- Modal para ver miembros de liga -->
+<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" id="league-members-modal">
+    <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-900">
+                Miembros de "{{ league.name }}" (Código: {{ league.code }})
+            </h3>
+            <button onclick="document.getElementById('league-members-modal').remove()" 
+                    class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="mb-4">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-blue-800">
+                            <strong>Total de Miembros:</strong> {{ members|length }}
+                        </p>
+                        <p class="text-sm text-blue-600">
+                            Estado: 
+                            <span class="font-semibold {{ 'text-green-600' if league.is_active else 'text-red-600' }}">
+                                {{ 'Activa' if league.is_active else 'Inactiva' }}
+                            </span>
+                        </p>
+                    </div>
+                    {% if league.description %}
+                    <div class="text-right">
+                        <p class="text-xs text-blue-600">{{ league.description }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tabla de miembros -->
+        <div class="max-h-96 overflow-y-auto">
+            {% if members %}
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Ingreso</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Picks Totales</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="members-table-body">
+                    {% for member in members %}
+                    <tr id="member-{{ member.id }}">
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                                    <span class="text-sm font-medium text-gray-700">{{ member.username[0].upper() }}</span>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium text-gray-900">{{ member.username }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {{ member.joined_at[:10] if member.joined_at else 'N/A' }}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                                {{ member.total_picks or 0 }} picks
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                            <button hx-post="{{ url_for('admin_remove_user_from_league') }}"
+                                    hx-vals='{"user_id": "{{ member.id }}", "league_id": "{{ league.id }}"}'
+                                    hx-target="#member-{{ member.id }}"
+                                    hx-swap="outerHTML"
+                                    hx-confirm="¿Estás seguro de que quieres remover a {{ member.username }} de esta liga?"
+                                    class="text-red-600 hover:text-red-900 transition-colors">
+                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                                Remover
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="text-center py-8">
+                <div class="text-gray-400 mb-4">
+                    <svg class="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No hay miembros</h3>
+                <p class="text-gray-500">Esta liga no tiene miembros registrados todavía.</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Notificaciones para acciones HTMX -->
+        <div id="member-notifications" class="mt-4"></div>
+        
+        <div class="mt-6 flex justify-between items-center">
+            <div class="text-sm text-gray-500">
+                Liga creada: {{ league.created_at[:10] if league.created_at else 'N/A' }}
+            </div>
+            <div class="space-x-2">
+                <button onclick="document.getElementById('league-members-modal').remove()" 
+                        class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-focus modal para accesibilidad
+document.getElementById('league-members-modal').focus();
+
+// Manejar respuestas HTMX para remover miembros
+document.body.addEventListener('htmx:afterRequest', function(event) {
+    if (event.detail.xhr.status === 200 && event.target.closest('#league-members-modal')) {
+        // Si la respuesta es exitosa y contiene un toast de éxito, remover la fila
+        const response = event.detail.xhr.responseText;
+        if (response.includes('success') && response.includes('removido')) {
+            // La fila ya se reemplaza con HTMX, solo necesitamos mostrar feedback
+            const notification = document.getElementById('member-notifications');
+            if (notification) {
+                notification.innerHTML = response;
+                setTimeout(() => {
+                    notification.innerHTML = '';
+                }, 3000);
+            }
+        }
+    }
+});
+</script>

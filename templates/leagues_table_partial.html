@@ -1,0 +1,86 @@
+<div id="leagues-table">
+    <h4 class="text-md font-medium text-gray-900 mb-4">Ligas Existentes</h4>
+    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+        <table class="min-w-full divide-y divide-gray-300">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Miembros</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for league in leagues %}
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ league.name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ league.code }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ league.member_count }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ 'bg-green-100 text-green-800' if league.is_active else 'bg-red-100 text-red-800' }}">
+                            {{ 'Activa' if league.is_active else 'Inactiva' }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex space-x-2">
+                            <!-- Botón Ver Detalles -->
+                            <button hx-get="{{ url_for('admin_view_league', league_id=league.id) }}" 
+                                    hx-target="#league-detail-modal" 
+                                    hx-swap="innerHTML"
+                                    title="Ver detalles de la liga"
+                                    class="text-blue-600 hover:text-blue-900">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                            </button>
+                            
+                            <!-- Botón Ver Miembros -->
+                            <button hx-get="{{ url_for('admin_league_members', league_id=league.id) }}" 
+                                    hx-target="#league-members-modal" 
+                                    hx-swap="innerHTML"
+                                    title="Ver miembros de la liga"
+                                    class="text-green-600 hover:text-green-900">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                            </button>
+                            
+                            <!-- Botón Editar -->
+                            <button hx-get="{{ url_for('admin_edit_league', league_id=league.id) }}" 
+                                    hx-target="#league-edit-modal" 
+                                    hx-swap="innerHTML"
+                                    title="Editar liga"
+                                    class="text-yellow-600 hover:text-yellow-900">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </button>
+
+                            <!-- Toggle Estado -->
+                            {% if league.is_active %}
+                                <form method="POST" action="{{ url_for('admin_toggle_league_status') }}" class="inline">
+                                    <input type="hidden" name="league_id" value="{{ league.id }}">
+                                    <input type="hidden" name="action" value="deactivate">
+                                    <button type="submit" class="text-red-600 hover:text-red-900">Desactivar</button>
+                                </form>
+                            {% else %}
+                                <form method="POST" action="{{ url_for('admin_toggle_league_status') }}" class="inline">
+                                    <input type="hidden" name="league_id" value="{{ league.id }}">
+                                    <input type="hidden" name="action" value="activate">
+                                    <button type="submit" class="text-green-600 hover:text-green-900">Activar</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay ligas registradas</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
