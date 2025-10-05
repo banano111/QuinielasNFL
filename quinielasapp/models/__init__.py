@@ -52,7 +52,32 @@ if database_url:
             
             print(f"📡 Conectando con pg8000 a {conn_params.get('host')}:{conn_params.get('port')}")
             
-            return pg8000.dbapi.connect(**conn_params)
+            conn = pg8000.dbapi.connect(**conn_params)
+            
+            # Agregar server_version manualmente para compatibilidad con Peewee
+            if not hasattr(conn, 'server_version'):
+                try:
+                    # Obtener versión del servidor
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT version()")
+                    version_str = cursor.fetchone()[0]
+                    cursor.close()
+                    
+                    # Extraer número de versión (ej: "PostgreSQL 14.9" -> 140009)
+                    import re
+                    match = re.search(r'PostgreSQL (\d+)\.(\d+)', version_str)
+                    if match:
+                        major, minor = match.groups()
+                        conn.server_version = int(major) * 10000 + int(minor) * 100
+                    else:
+                        conn.server_version = 130000  # Default fallback
+                        
+                    print(f"🔢 Server version detectada: {conn.server_version}")
+                except Exception as e:
+                    print(f"⚠️ No se pudo obtener server_version: {e}")
+                    conn.server_version = 130000  # Default fallback
+            
+            return conn
     
     # Crear instancia con configuración manual
     database = Pg8000PostgresDatabase(
