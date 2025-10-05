@@ -471,17 +471,18 @@ def process_results():
                     home_score_int = int(home_score) if str(home_score).isdigit() else 0
                     away_score_int = int(away_score) if str(away_score).isdigit() else 0
                     
-                    result, created = GameResult.get_or_create(
-                        game_id=game_id,
-                        week=week,
-                        defaults={
-                            'home_team': home_team,
-                            'away_team': away_team,
-                            'home_score': home_score_int,
-                            'away_score': away_score_int,
-                            'winner': winner
-                        }
-                    )
+                    with database.atomic():
+                        result, created = GameResult.get_or_create(
+                            game_id=game_id,
+                            week=week,
+                            defaults={
+                                'home_team': home_team,
+                                'away_team': away_team,
+                                'home_score': home_score_int,
+                                'away_score': away_score_int,
+                                'winner': winner
+                            }
+                        )
                     
                     if not created:
                         # Actualizar resultado existente solo si cambió algo
@@ -494,12 +495,13 @@ def process_results():
                         )
                         
                         if needs_update:
-                            result.home_team = home_team
-                            result.away_team = away_team
-                            result.home_score = home_score_int
-                            result.away_score = away_score_int
-                            result.winner = winner
-                            result.save()
+                            with database.atomic():
+                                result.home_team = home_team
+                                result.away_team = away_team
+                                result.home_score = home_score_int
+                                result.away_score = away_score_int
+                                result.winner = winner
+                                result.save()
                             updated_games += 1
                             print(f"Actualizado juego {game_id}: {away_team} @ {home_team} ({away_score_int}-{home_score_int})")
                     else:
@@ -690,17 +692,18 @@ def declare_winner():
             winners = [data for data in user_scores.values() if data['correct_picks'] == max_score]
             
             # 3. Limpiar ganadores existentes para esta liga/semana y crear nuevos
-            WinnersHistory.delete().where(
-                (WinnersHistory.league_id == league.id) & 
-                (WinnersHistory.week == week)
-            ).execute()
-            
-            # Crear entradas de ganadores (uno por ganador en caso de empate)
-            for winner in winners:
-                WinnersHistory.create(
-                    user_id=winner['user_id'],
-                    league_id=league.id,
-                    week=week,
+            with database.atomic():
+                WinnersHistory.delete().where(
+                    (WinnersHistory.league_id == league.id) & 
+                    (WinnersHistory.week == week)
+                ).execute()
+                
+                # Crear entradas de ganadores (uno por ganador en caso de empate)
+                for winner in winners:
+                    WinnersHistory.create(
+                        user_id=winner['user_id'],
+                        league_id=league.id,
+                        week=week,
                     winner_username=winner['username'],
                     score=winner['correct_picks'],
                     is_tie=len(winners) > 1
@@ -962,9 +965,10 @@ def remove_user_from_league():
         user = User.get_by_id(user_id)
         league = League.get_by_id(league_id)
         
-        # Desactivar membresía en lugar de eliminar
-        membership.is_active = False
-        membership.save()
+        # Desactivar membresía en lugar de eliminar con transacción
+        with database.atomic():
+            membership.is_active = False
+            membership.save()
         
         return render_template('toast_partial.html',
                              category='success',

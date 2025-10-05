@@ -497,18 +497,18 @@ def picks_form():
                 if key.startswith('game_') and selection:
                     game_id = key.replace('game_', '')
                     
-                    # Usar get_or_create para actualizar picks existentes
-                    pick, created = Pick.get_or_create(
-                        user=user,
-                        league=current_league,
-                        week=current_week,
-                        game_id=game_id,
-                        defaults={'selection': selection}
-                    )
-                    
-                    if not created:
-                        # Actualizar pick existente con transacción
-                        with database.atomic():
+                    # Usar get_or_create para actualizar picks existentes con transacción
+                    with database.atomic():
+                        pick, created = Pick.get_or_create(
+                            user=user,
+                            league=current_league,
+                            week=current_week,
+                            game_id=game_id,
+                            defaults={'selection': selection}
+                        )
+                        
+                        if not created:
+                            # Actualizar pick existente
                             pick.selection = selection
                             pick.save()
                     

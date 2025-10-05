@@ -127,12 +127,15 @@ class SystemConfig(BaseModel):
     @classmethod 
     def set_config(cls, key, value):
         """Helper para guardar configuración"""
-        config, created = cls.get_or_create(
-            config_key=key,
-            defaults={'config_value': str(value)}
-        )
-        if not created:
-            config.config_value = str(value)
-            config.updated_at = datetime.now()
-            config.save()
+        from quinielasapp.models import database
+        
+        with database.atomic():
+            config, created = cls.get_or_create(
+                config_key=key,
+                defaults={'config_value': str(value)}
+            )
+            if not created:
+                config.config_value = str(value)
+                config.updated_at = datetime.now()
+                config.save()
         return config
