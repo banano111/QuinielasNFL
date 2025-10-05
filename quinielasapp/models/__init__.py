@@ -34,18 +34,23 @@ if database_url:
             # Forzar el uso de pg8000 directamente
             import pg8000.dbapi
             
+            # Usar los atributos correctos de Peewee
             conn_params = {
-                'host': self.database_config.get('host', 'localhost'),
-                'port': self.database_config.get('port', 5432),
-                'user': self.database_config.get('user'),
-                'password': self.database_config.get('password'),
-                'database': self.database_config.get('database')
+                'host': getattr(self, 'host', 'localhost'),
+                'port': getattr(self, 'port', 5432),
+                'user': getattr(self, 'user', None),
+                'password': getattr(self, 'password', None),
+                'database': self.database
             }
+            
+            # Agregar parámetros adicionales de connect_params si existen
+            if hasattr(self, 'connect_params'):
+                conn_params.update(self.connect_params)
             
             # Remover None values
             conn_params = {k: v for k, v in conn_params.items() if v is not None}
             
-            print(f"📡 Conectando con pg8000 a {conn_params['host']}:{conn_params['port']}")
+            print(f"📡 Conectando con pg8000 a {conn_params.get('host')}:{conn_params.get('port')}")
             
             return pg8000.dbapi.connect(**conn_params)
     
