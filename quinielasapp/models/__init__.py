@@ -19,30 +19,46 @@ print("🐘 Configurando PostgreSQL con pg8000...")
 database_url = os.environ.get('DATABASE_URL')
 
 if database_url:
-    # Producción (Render) - usar DATABASE_URL con pg8000
+    # Producción (Render) - configurar PostgreSQL con pg8000 forzado
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     
     print(f"🔗 Conectando a: {database_url.split('@')[1] if '@' in database_url else 'PostgreSQL'}")
     
-    # Usar el DATABASE_URL directamente - Peewee debería detectar pg8000 automáticamente
-    from playhouse.db_url import connect
-    try:
-        database = connect(database_url)
-        print("✅ Conexión PostgreSQL configurada con playhouse.db_url")
-    except Exception as e:
-        print(f"❌ Error con playhouse.db_url: {e}")
-        # Fallback manual
-        result = urlparse(database_url)
-        database = PostgresqlDatabase(
-            result.path[1:],
-            user=result.username,
-            password=result.password,
-            host=result.hostname,
-            port=result.port or 5432,
-            autoconnect=False
-        )
-        print("✅ Configuración PostgreSQL manual lista")
+    # Parse DATABASE_URL
+    result = urlparse(database_url)
+    
+    # Crear clase personalizada que fuerza el uso de pg8000
+    class Pg8000PostgresDatabase(PostgresqlDatabase):
+        def _connect(self):
+            # Forzar el uso de pg8000 directamente
+            import pg8000.dbapi
+            
+            conn_params = {
+                'host': self.database_config.get('host', 'localhost'),
+                'port': self.database_config.get('port', 5432),
+                'user': self.database_config.get('user'),
+                'password': self.database_config.get('password'),
+                'database': self.database_config.get('database')
+            }
+            
+            # Remover None values
+            conn_params = {k: v for k, v in conn_params.items() if v is not None}
+            
+            print(f"📡 Conectando con pg8000 a {conn_params['host']}:{conn_params['port']}")
+            
+            return pg8000.dbapi.connect(**conn_params)
+    
+    # Crear instancia con configuración manual
+    database = Pg8000PostgresDatabase(
+        result.path[1:],  # database name
+        user=result.username,
+        password=result.password,
+        host=result.hostname,
+        port=result.port or 5432,
+        autoconnect=False
+    )
+    print("✅ Base de datos configurada con pg8000 forzado")
     
 else:
     # Desarrollo local - usar variables individuales
