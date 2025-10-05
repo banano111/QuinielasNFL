@@ -6,6 +6,7 @@ Migra las funciones helper que estaban en app.py usando raw SQL.
 from datetime import datetime
 import hashlib
 from quinielasapp.models.models import *
+from quinielasapp.models import database
 from peewee import fn
 import string
 import random
@@ -21,7 +22,8 @@ def create_default_admin():
             is_admin=True
         )
         admin.set_password('QuinielasNFL2024!')  # CAMBIAR EN PRODUCCIÓN
-        admin.save()
+        with database.atomic():
+            admin.save()
         return admin
 
 def initialize_system_config():
@@ -73,22 +75,24 @@ def join_league_by_code(user_id, league_code):
             if existing.is_active:
                 return {'success': False, 'error': 'Ya eres miembro de esta liga'}
             else:
-                # Reactivar membresía
-                existing.is_active = True
-                existing.joined_at = datetime.now()
-                existing.save()
+                # Reactivar membresía con transacción
+                with database.atomic():
+                    existing.is_active = True
+                    existing.joined_at = datetime.now()
+                    existing.save()
                 return {'success': True, 'league_name': league.name}
         
         # Verificar límite de miembros
         if league.member_count >= league.max_members:
             return {'success': False, 'error': 'La liga ha alcanzado el límite de miembros'}
         
-        # Crear nueva membresía
-        LeagueMembership.create(
-            user=user,
-            league=league,
-            joined_at=datetime.now()
-        )
+        # Crear nueva membresía con transacción
+        with database.atomic():
+            LeagueMembership.create(
+                user=user,
+                league=league,
+                joined_at=datetime.now()
+            )
         
         return {'success': True, 'league_name': league.name}
         

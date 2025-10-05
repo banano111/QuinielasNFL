@@ -5,6 +5,7 @@ Organiza todas las funcionalidades del panel admin
 import json
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from quinielasapp.models.models import User, League, LeagueMembership, Pick, GameResult, SystemConfig
+from quinielasapp.models import database
 from quinielasapp.services.database_service import (
     get_current_week, set_current_week, get_system_config,
     generate_league_code, get_user_leagues,
@@ -248,14 +249,15 @@ def create_league():
             flash(f'Ya existe una liga con el código {league_code}', 'error')
             return redirect(url_for('admin.dashboard'))
         
-        # Crear la liga
-        League.create(
-            name=league_name,
-            code=league_code,
-            description=league_description or None,
-            created_by=session['user_id'],
-            is_active=True
-        )
+        # Crear la liga con transacción explícita
+        with database.atomic():
+            League.create(
+                name=league_name,
+                code=league_code,
+                description=league_description or None,
+                created_by=session['user_id'],
+                is_active=True
+            )
         
         # Retornar la lista actualizada de ligas
         return render_template('admin_leagues_partial.html', leagues=League.select())
@@ -302,12 +304,13 @@ def add_user_to_league():
         if membership_exists:
             flash(f'El usuario {user.username} ya es miembro de la liga {league.name}', 'error')
         else:
-            # Crear la membresía
-            LeagueMembership.create(
-                user=user,
-                league=league,
-                is_active=True
-            )
+            # Crear la membresía con transacción
+            with database.atomic():
+                LeagueMembership.create(
+                    user=user,
+                    league=league,
+                    is_active=True
+                )
             return f'''
             <div class="rounded-md p-4 bg-green-50 border border-green-200 text-green-800">
                 <div class="flex">
@@ -884,12 +887,13 @@ def update_league(league_id):
                                  category='error',
                                  message='Número de miembros inválido')
         
-        # Actualizar liga
-        league.name = name
-        league.description = description if description else None
-        league.max_members = max_members
-        league.is_active = is_active
-        league.save()
+        # Actualizar liga con transacción
+        with database.atomic():
+            league.name = name
+            league.description = description if description else None
+            league.max_members = max_members
+            league.is_active = is_active
+            league.save()
         
         return render_template('toast_partial.html',
                              category='success',

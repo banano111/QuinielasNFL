@@ -397,15 +397,17 @@ def register():
                 is_admin=False
             )
             user.set_password(password)
-            user.save()
             
-            # Agregar a la liga
-            LeagueMembership.create(
-                user=user,
-                league=league,
-                joined_at=datetime.now(),
-                is_active=True
-            )
+            # Guardar usuario y agregar a liga con transacción
+            with database.atomic():
+                user.save()
+                # Agregar a la liga
+                LeagueMembership.create(
+                    user=user,
+                    league=league,
+                    joined_at=datetime.now(),
+                    is_active=True
+                )
             
             flash('Registro exitoso. Ahora puedes iniciar sesión.', 'success')
             return redirect(url_for('login'))
@@ -505,9 +507,10 @@ def picks_form():
                     )
                     
                     if not created:
-                        # Actualizar pick existente
-                        pick.selection = selection
-                        pick.save()
+                        # Actualizar pick existente con transacción
+                        with database.atomic():
+                            pick.selection = selection
+                            pick.save()
                     
                     picks_saved += 1
             
