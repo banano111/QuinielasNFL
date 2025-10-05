@@ -817,6 +817,45 @@ def user_picks_status():
         print(f"Error in user_picks_status: {e}")
         return render_template('user_picks_status.html', leagues_status=[], current_week=0)
 
+@app.route('/my_leagues')
+def my_leagues():
+    """Página para administrar las ligas del usuario"""
+    if 'user_id' not in session:
+        flash('Debes iniciar sesión', 'error')
+        return redirect(url_for('login'))
+    
+    try:
+        # Obtener todas las ligas del usuario
+        user_leagues = get_user_leagues(session['user_id'])
+        current_league_id = session.get('current_league_id')
+        
+        # Enriquecer información de ligas con datos adicionales
+        enriched_leagues = []
+        for league in user_leagues:
+            # Contar miembros de la liga
+            member_count = LeagueMembership.select().where(LeagueMembership.league == league).count()
+            
+            league_data = {
+                'id': league.id,
+                'name': league.name,
+                'code': league.code,
+                'description': league.description,
+                'is_active': league.is_active,
+                'max_members': league.max_members,
+                'member_count': member_count,
+                'created_at': league.created_at
+            }
+            enriched_leagues.append(league_data)
+        
+        return render_template('my_leagues.html', 
+                             user_leagues=enriched_leagues,
+                             current_league_id=current_league_id)
+    
+    except Exception as e:
+        print(f"Error in my_leagues: {e}")
+        flash('Error al cargar las ligas', 'error')
+        return redirect(url_for('home'))
+
 @app.route('/join_league', methods=['GET', 'POST'])
 def join_league_route():
     """Permite al usuario unirse a una liga con código"""

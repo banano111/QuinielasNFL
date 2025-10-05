@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Ligas - Quinielas NFL</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .nflblue { background-color: #013369; }
+        .nflorange { color: #FF6900; }
+        .nflred { background-color: #D50A0A; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<!-- Navigation -->
+<nav class="nflblue shadow-lg">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="flex justify-between items-center h-16">
+            <div class="flex items-center space-x-4">
+                <h1 class="text-xl font-bold text-white">🏈 Quinielas NFL</h1>
+                <span class="text-sm text-gray-200">Mis Ligas</span>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <a href="#" 
+                   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm font-medium">
+                    ← Volver al Dashboard
+                </a>
+                <a href="#" 
+                   class="nflred hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm font-medium">
+                    Cerrar Sesión
+                </a>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="max-w-6xl mx-auto p-4">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Mis Ligas</h1>
+        <p class="text-gray-600">Administra tus ligas, únete a nuevas ligas y cambia entre ellas.</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Panel Izquierdo: Unirse a Nueva Liga -->
+        <div class="lg:col-span-1">
+            <div class="bg-white rounded-lg shadow border border-gray-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="p-2 bg-green-100 rounded-lg">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                    </div>
+                    <h2 class="ml-3 text-lg font-medium text-gray-900">Unirse a Nueva Liga</h2>
+                </div>
+                
+                <form class="space-y-4">
+                    <div>
+                        <label for="code" class="block text-sm font-medium text-gray-700 mb-2">
+                            Código de Liga *
+                        </label>
+                        <input type="text" 
+                               id="code" 
+                               name="code" 
+                               required 
+                               maxlength="6"
+                               class="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-mono tracking-wider uppercase"
+                               placeholder="ABC123"
+                               style="text-transform: uppercase;">
+                        <p class="text-sm text-gray-500 mt-2">Ingresa el código de 6 caracteres que te proporcionó el administrador de la liga</p>
+                    </div>
+                    
+                    <button type="submit" 
+                            class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200">
+                        Unirse a Liga
+                    </button>
+                </form>
+                
+                <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                    <h3 class="text-sm font-medium text-blue-900 mb-2">💡 ¿Cómo obtener un código?</h3>
+                    <p class="text-sm text-blue-800">Pide al administrador de la liga que te proporcione el código de 6 caracteres. Cada liga tiene un código único.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Principal: Mis Ligas Actuales -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-medium text-gray-900">Mis Ligas (3)</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Liga 1 - Activa (Liga Actual) -->
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200 ring-2 ring-blue-500 bg-blue-50">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h3 class="font-medium text-gray-900">Liga de Amigos</h3>
+                                    <p class="text-sm text-gray-500 mt-1">Código: <span class="font-mono">ABC123</span></p>
+                                    <p class="text-sm text-gray-600 mt-2">Liga de amigos de la universidad</p>
+                                </div>
+                                
+                                <div class="flex flex-col items-end space-y-2 ml-4">
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                        Liga Actual
+                                    </span>
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                        Activa
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 pt-3 border-t border-gray-100">
+                                <div class="flex items-center justify-between text-sm text-gray-500">
+                                    <span>Miembros: 8/20</span>
+                                    <span>Creada: 15/09/2024</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Liga 2 -->
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h3 class="font-medium text-gray-900">Liga Oficina</h3>
+                                    <p class="text-sm text-gray-500 mt-1">Código: <span class="font-mono">XYZ789</span></p>
+                                    <p class="text-sm text-gray-600 mt-2">Compañeros de trabajo</p>
+                                </div>
+                                
+                                <div class="flex flex-col items-end space-y-2 ml-4">
+                                    <button onclick="switchLeague(2)" 
+                                            class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full transition-colors duration-200">
+                                        Cambiar a Esta Liga
+                                    </button>
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                        Activa
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 pt-3 border-t border-gray-100">
+                                <div class="flex items-center justify-between text-sm text-gray-500">
+                                    <span>Miembros: 12/15</span>
+                                    <span>Creada: 20/09/2024</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Liga 3 -->
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h3 class="font-medium text-gray-900">Liga Familiar</h3>
+                                    <p class="text-sm text-gray-500 mt-1">Código: <span class="font-mono">FAM456</span></p>
+                                    <p class="text-sm text-gray-600 mt-2">Familia extendida</p>
+                                </div>
+                                
+                                <div class="flex flex-col items-end space-y-2 ml-4">
+                                    <button onclick="switchLeague(3)" 
+                                            class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full transition-colors duration-200">
+                                        Cambiar a Esta Liga
+                                    </button>
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                        Inactiva
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 pt-3 border-t border-gray-100">
+                                <div class="flex items-center justify-between text-sm text-gray-500">
+                                    <span>Miembros: 6/10</span>
+                                    <span>Creada: 01/09/2024</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Estado Sin Ligas (oculto en este ejemplo) -->
+                        <!--
+                        <div class="text-center py-12 col-span-2">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">No hay ligas</h3>
+                            <p class="mt-1 text-sm text-gray-500">Aún no perteneces a ninguna liga. Únete a una usando un código de liga.</p>
+                        </div>
+                        -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información Adicional -->
+            <div class="mt-6 bg-gray-50 rounded-lg p-6 border border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">🔰 Información Sobre Ligas</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="font-medium text-gray-900 mb-2">¿Qué es una liga?</h4>
+                        <p class="text-sm text-gray-600">Las ligas son grupos de usuarios que compiten entre sí haciendo predicciones sobre los juegos de la NFL. Cada liga tiene sus propias clasificaciones y ganadores.</p>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-gray-900 mb-2">¿Cómo cambiar de liga?</h4>
+                        <p class="text-sm text-gray-600">Puedes pertenecer a múltiples ligas y cambiar entre ellas usando los botones "Cambiar a Esta Liga" o el selector en el dashboard principal.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function switchLeague(leagueId) {
+    // Simulación para el preview
+    alert(`Cambiando a liga con ID: ${leagueId}`);
+    
+    // En la implementación real, esto haría la llamada fetch:
+    /*
+    fetch('/switch_league', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ league_id: leagueId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Mostrar toast de éxito y redirigir
+            window.location.href = '/';
+        } else {
+            // Mostrar toast de error
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al cambiar de liga');
+    });
+    */
+}
+</script>
+
+</body>
+</html>
