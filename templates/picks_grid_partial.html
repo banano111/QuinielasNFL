@@ -1,42 +1,35 @@
 <!-- Cuadrícula de picks parcial para HTMX -->
 <style>
-    .picks-grid-container {
-        display: flex;
+    /* Contenedor principal con scroll unificado */
+    .main-grid-container {
+        max-height: 400px;
+        overflow: auto; /* Scroll horizontal Y vertical unificados */
         border: 1px solid #e5e7eb;
         background-color: #e5e7eb;
-        max-height: 400px;
-        overflow: hidden;
     }
     
-    .users-column {
-        min-width: 120px;
-        max-width: 120px;
-        background-color: #f9fafb;
-        border-right: 2px solid #e5e7eb;
-        overflow-y: auto;
-    }
-    
-    .games-scroll-container {
-        flex: 1;
-        overflow: auto;
-    }
-    
-    .games-grid {
+    /* Tabla unificada usando CSS Grid */
+    .unified-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(80px, 80px));
+        grid-template-columns: 120px repeat({{ games|length }}, 80px);
         gap: 1px;
         background-color: #e5e7eb;
-        min-width: min-content;
+        min-width: calc(120px + {{ games|length }} * 80px); /* Ancho mínimo calculado */
     }
     
+    /* Definir altura exacta para todas las celdas */
     .cell {
         background-color: white;
         padding: 4px;
         display: flex;
         align-items: center;
         justify-content: center;
+        height: 45px; /* Altura fija exacta */
         min-height: 45px;
+        max-height: 45px;
         border: 1px solid #e5e7eb;
+        box-sizing: border-box;
+        line-height: 1;
     }
     
     .user-header-cell {
@@ -46,6 +39,9 @@
         padding-left: 8px;
         border-bottom: 2px solid #e5e7eb;
         font-size: 0.75rem;
+        position: sticky;
+        top: 0;
+        z-index: 20;
     }
     
     .user-cell {
@@ -53,148 +49,153 @@
         font-weight: 500;
         justify-content: flex-start;
         padding-left: 8px;
-        border-bottom: 1px solid #e5e7eb;
         font-size: 0.75rem;
+        position: sticky;
+        left: 0;
+        z-index: 10;
     }
     
     .game-header-cell {
         background-color: #f3f4f6;
         font-weight: 600;
+        border-bottom: 2px solid #e5e7eb;
         position: sticky;
         top: 0;
-        z-index: 10;
+        z-index: 15;
     }
     
     .pick-cell {
         background-color: white;
     }
+    
+    /* Celda especial esquina superior izquierda */
+    .corner-cell {
+        position: sticky;
+        top: 0;
+        left: 0;
+        z-index: 25; /* Máxima prioridad */
+        background-color: #f3f4f6;
+    }
 </style>
 
 <div class="p-4">
     {% if games and users %}
-        <div class="picks-grid-container">
-            
-            <!-- Users Column (Fixed) -->
-            <div class="users-column">
-                <!-- Header for Users Column -->
-                <div class="cell user-header-cell">
+        <!-- Contenedor Principal con Scroll Unificado -->
+        <div class="main-grid-container">
+            <div class="unified-grid">
+                
+                <!-- Header Row: Celda Esquina + Headers de Juegos -->
+                <!-- Celda esquina superior izquierda -->
+                <div class="cell user-header-cell corner-cell">
                     <span class="text-gray-700 font-semibold">Usuario</span>
                 </div>
                 
-                <!-- User Names -->
+                <!-- Headers de Juegos -->
+                {% for game in games %}
+                    <div class="cell game-header-cell">
+                        <div class="flex flex-col items-center space-y-1">
+                            <!-- Away @ Home -->
+                            <div class="flex items-center space-x-1">
+                                {% set away_team_name = game.away_team.name if game.away_team is mapping else game.away_team %}
+                                {% set home_team_name = game.home_team.name if game.home_team is mapping else game.home_team %}
+                                
+                                {% if game.get('away_logo') %}
+                                    <img src="{{ game.away_logo }}" alt="{{ away_team_name }}" class="w-3 h-3">
+                                {% else %}
+                                    <div class="w-3 h-3 bg-gray-200 rounded-full flex items-center justify-center">
+                                        <span class="text-xs">{{ away_team_name[:1] if away_team_name else '?' }}</span>
+                                    </div>
+                                {% endif %}
+                                
+                                <span class="text-xs text-gray-500">@</span>
+                                
+                                {% if game.get('home_logo') %}
+                                    <img src="{{ game.home_logo }}" alt="{{ home_team_name }}" class="w-3 h-3">
+                                {% else %}
+                                    <div class="w-3 h-3 bg-gray-200 rounded-full flex items-center justify-center">
+                                        <span class="text-xs">{{ home_team_name[:1] if home_team_name else '?' }}</span>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Game Status -->
+                            {% if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] %}
+                                <div class="text-xs text-green-600 font-medium">F</div>
+                            {% elif game.get('status') == 'STATUS_IN_PROGRESS' %}
+                                <div class="text-xs text-yellow-600 font-medium animate-pulse">L</div>
+                            {% else %}
+                                <div class="text-xs text-gray-400">{{ game.start_time[-5:] if game.start_time and game.start_time != 'TBD' else 'TBD' }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+                
+                <!-- Filas de Datos: Usuario + Picks -->
                 {% for user in users %}
+                    <!-- Celda de Usuario -->
                     <div class="cell user-cell">
                         <span class="text-gray-800 truncate">{{ user.username[:8] }}{{ '...' if user.username|length > 8 else '' }}</span>
                     </div>
-                {% endfor %}
-            </div>
-            
-            <!-- Games Grid (Scrollable) -->
-            <div class="games-scroll-container">
-                <div class="games-grid" style="grid-template-columns: repeat({{ games|length }}, 80px);">
                     
-                    <!-- Games Header Row -->
+                    <!-- Celdas de Picks -->
                     {% for game in games %}
-                        <div class="cell game-header-cell">
-                            <div class="flex flex-col items-center space-y-1">
-                                <!-- Away @ Home -->
-                                <div class="flex items-center space-x-1">
-                                    {% set away_team_name = game.away_team.name if game.away_team is mapping else game.away_team %}
-                                    {% set home_team_name = game.home_team.name if game.home_team is mapping else game.home_team %}
-                                    
-                                    {% if game.get('away_logo') %}
-                                        <img src="{{ game.away_logo }}" alt="{{ away_team_name }}" class="w-3 h-3">
-                                    {% else %}
-                                        <div class="w-3 h-3 bg-gray-200 rounded-full flex items-center justify-center">
-                                            <span class="text-xs">{{ away_team_name[:1] if away_team_name else '?' }}</span>
-                                        </div>
-                                    {% endif %}
-                                    
-                                    <span class="text-xs text-gray-500">@</span>
-                                    
-                                    {% if game.get('home_logo') %}
-                                        <img src="{{ game.home_logo }}" alt="{{ home_team_name }}" class="w-3 h-3">
-                                    {% else %}
-                                        <div class="w-3 h-3 bg-gray-200 rounded-full flex items-center justify-center">
-                                            <span class="text-xs">{{ home_team_name[:1] if home_team_name else '?' }}</span>
-                                        </div>
-                                    {% endif %}
-                                </div>
+                        <div class="cell pick-cell">
+                            {% set user_pick = picks_matrix.get(user.id, {}).get(game.id) %}
+                            {% if user_pick %}
+                                {% set home_team_name = game.home_team.name if game.home_team is mapping else game.home_team %}
+                                {% set away_team_name = game.away_team.name if game.away_team is mapping else game.away_team %}
+                                {% set home_team_abbr = game.home_team.abbreviation if game.home_team is mapping else home_team_name %}
+                                {% set away_team_abbr = game.away_team.abbreviation if game.away_team is mapping else away_team_name %}
                                 
-                                <!-- Game Status -->
-                                {% if game.get('status') in ['STATUS_FINAL', 'Final', 'Completed', 'final'] %}
-                                    <div class="text-xs text-green-600 font-medium">F</div>
-                                {% elif game.get('status') == 'STATUS_IN_PROGRESS' %}
-                                    <div class="text-xs text-yellow-600 font-medium animate-pulse">L</div>
-                                {% else %}
-                                    <div class="text-xs text-gray-400">{{ game.start_time[-5:] if game.start_time and game.start_time != 'TBD' else 'TBD' }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    {% endfor %}
-                    
-                    <!-- Picks Grid Data -->
-                    {% for user in users %}
-                        {% for game in games %}
-                            <div class="cell pick-cell">
-                                {% set user_pick = picks_matrix.get(user.id, {}).get(game.id) %}
-                                {% if user_pick %}
-                                    {% set home_team_name = game.home_team.name if game.home_team is mapping else game.home_team %}
-                                    {% set away_team_name = game.away_team.name if game.away_team is mapping else game.away_team %}
-                                    {% set home_team_abbr = game.home_team.abbreviation if game.home_team is mapping else home_team_name %}
-                                    {% set away_team_abbr = game.away_team.abbreviation if game.away_team is mapping else away_team_name %}
+                                <div class="flex flex-col items-center space-y-1">
+                                    <!-- Team Logo del Pick -->
+                                    {# Now selection is always a dict with name and abbreviation #}
+                                    {% set pick_name = user_pick.selection.name %}
+                                    {% set pick_abbr = user_pick.selection.abbreviation %}
                                     
-                                    <div class="flex flex-col items-center space-y-1">
-                                        <!-- Team Logo del Pick -->
-                                        {# Now selection is always a dict with name and abbreviation #}
-                                        {% set pick_name = user_pick.selection.name %}
-                                        {% set pick_abbr = user_pick.selection.abbreviation %}
-                                        
-                                        {% if pick_name == home_team_name or pick_abbr == home_team_abbr %}
-                                            {% if game.get('home_logo') %}
-                                                <img src="{{ game.home_logo }}" alt="{{ pick_name }}" class="w-5 h-5 object-contain">
-                                            {% else %}
-                                                <div class="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
-                                                    <span class="text-xs font-bold">{{ home_team_abbr[:2] }}</span>
-                                                </div>
-                                            {% endif %}
-                                        {% elif pick_name == away_team_name or pick_abbr == away_team_abbr %}
-                                            {% if game.get('away_logo') %}
-                                                <img src="{{ game.away_logo }}" alt="{{ pick_name }}" class="w-5 h-5 object-contain">
-                                            {% else %}
-                                                <div class="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
-                                                    <span class="text-xs font-bold">{{ away_team_abbr[:2] }}</span>
-                                                </div>
-                                            {% endif %}
+                                    {% if pick_name == home_team_name or pick_abbr == home_team_abbr %}
+                                        {% if game.get('home_logo') %}
+                                            <img src="{{ game.home_logo }}" alt="{{ pick_name }}" class="w-5 h-5 object-contain">
                                         {% else %}
-                                            <!-- Pick no coincide con equipos actuales -->
-                                            <div class="w-5 h-5 bg-orange-200 rounded-full flex items-center justify-center">
-                                                <span class="text-xs font-bold">{{ pick_abbr[:2] if pick_abbr else '?' }}</span>
+                                            <div class="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
+                                                <span class="text-xs font-bold">{{ home_team_abbr[:2] }}</span>
                                             </div>
                                         {% endif %}
-                                        
-                                        <!-- Result Icon -->
-                                        <div class="text-sm">
-                                            {% if user_pick.is_correct == True %}
-                                                <span class="text-green-500">✓</span>
-                                            {% elif user_pick.is_correct == False %}
-                                                <span class="text-red-500">✗</span>
-                                            {% else %}
-                                                <span class="text-gray-400">○</span>
-                                            {% endif %}
+                                    {% elif pick_name == away_team_name or pick_abbr == away_team_abbr %}
+                                        {% if game.get('away_logo') %}
+                                            <img src="{{ game.away_logo }}" alt="{{ pick_name }}" class="w-5 h-5 object-contain">
+                                        {% else %}
+                                            <div class="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
+                                                <span class="text-xs font-bold">{{ away_team_abbr[:2] }}</span>
+                                            </div>
+                                        {% endif %}
+                                    {% else %}
+                                        <!-- Pick no coincide con equipos actuales -->
+                                        <div class="w-5 h-5 bg-orange-200 rounded-full flex items-center justify-center">
+                                            <span class="text-xs font-bold">{{ pick_abbr[:2] if pick_abbr else '?' }}</span>
                                         </div>
+                                    {% endif %}
+                                    
+                                    <!-- Result Icon -->
+                                    <div class="text-sm">
+                                        {% if user_pick.is_correct == True %}
+                                            <span class="text-green-500">✓</span>
+                                        {% elif user_pick.is_correct == False %}
+                                            <span class="text-red-500">✗</span>
+                                        {% else %}
+                                            <span class="text-gray-400">○</span>
+                                        {% endif %}
                                     </div>
-                                {% else %}
-                                    <!-- No Pick -->
-                                    <div class="text-gray-300 text-sm">-</div>
-                                {% endif %}
-                            </div>
-                        {% endfor %}
+                                </div>
+                            {% else %}
+                                <!-- No Pick -->
+                                <div class="text-gray-300 text-sm">-</div>
+                            {% endif %}
+                        </div>
                     {% endfor %}
-                    
-                </div>
+                {% endfor %}
+                
             </div>
-            
         </div>
         
         <div class="mt-3 text-center">
